@@ -20,7 +20,7 @@ pub struct PlayerDataStorage {
 
 impl PlayerDataStorage {
     pub fn new(level_access: &WorldDir) -> PlayerDataStorage {
-        PlayerDataStorage { player_dir: level_access.root.join("players/data") }
+        PlayerDataStorage { player_dir: level_access.root.join("players").join("data") }
     }
 
     pub fn save(&self, data_to_store: &Nbt, uuid: u128, plain_text_name: &str) {

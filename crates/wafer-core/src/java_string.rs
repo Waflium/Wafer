@@ -137,6 +137,27 @@ fn next_code_point(b: &[u8]) -> (Option<char>, usize) {
     }
 }
 
+pub fn push_str(dest: &mut String, src: &str) {
+    let mut chars = src.chars();
+    if let (Some(high), Some(low)) = (dest.chars().next_back().and_then(lone_surrogate_unit), chars.next().and_then(lone_surrogate_unit))
+        && (0xD800..0xDC00).contains(&high)
+        && (0xDC00..0xE000).contains(&low)
+    {
+        let joined = char::from_u32(0x10000 + (((high as u32) - 0xD800) << 10 | ((low as u32) - 0xDC00))).expect("a supplementary character");
+        if lone_surrogate_unit(joined).is_none() {
+            dest.truncate(dest.len() - 4);
+            dest.push(joined);
+            dest.push_str(chars.as_str());
+            return;
+        }
+    }
+    dest.push_str(src);
+}
+
+pub fn push_char(dest: &mut String, c: char) {
+    push_str(dest, c.encode_utf8(&mut [0; 4]));
+}
+
 pub fn utf16_units(s: &str) -> impl Iterator<Item = u16> + Clone + '_ {
     s.chars().flat_map(|c| {
         let mut buffer = [0u16; 2];
@@ -251,6 +272,19 @@ mod tests {
         assert_eq!(to_utf8_lossy(&lone), "?");
         assert_eq!(crate::random::java_string_hash(&genuine), 1801930);
         assert_eq!(crate::random::java_string_hash(&from_utf16(&[0xDBF7, 0xDFFF])), 1802984);
+    }
+
+    #[test]
+    fn joining_lone_surrogates_gives_the_canonical_form() {
+        let mut text = from_utf16(&[0x61, 0xD83D]);
+        push_str(&mut text, &from_utf16(&[0xDE00, 0x62]));
+        assert_eq!(text, "a\u{1F600}b");
+        let mut genuine = from_utf16(&[0xDBF6]);
+        push_str(&mut genuine, &from_utf16(&[0xDC00]));
+        assert_eq!(genuine, from_utf16(&[0xDBF6, 0xDC00]));
+        let mut apart = from_utf16(&[0xDC00]);
+        push_char(&mut apart, lone_surrogate_char(0xD800));
+        assert_eq!(apart, from_utf16(&[0xDC00, 0xD800]));
     }
 
     fn hex_bytes(hex: &str) -> Vec<u8> {

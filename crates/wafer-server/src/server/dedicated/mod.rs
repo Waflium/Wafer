@@ -198,13 +198,12 @@ pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     destroy_java_vm_id();
     let _ = std::thread::Builder::new().name("Server console handler".into()).spawn(move || {
         let stdin = io::stdin();
-        let mut line = Vec::new();
+        let mut skip_lf = false;
         while !STOPPED_OR_NOT_RUNNING.load(std::sync::atomic::Ordering::Acquire) {
-            line.clear();
-            match stdin.lock().read_until(b'\n', &mut line) {
-                Ok(0) => break,
-                Ok(_) => {
-                    let command = wafer_core::java_string::decode_utf8(&line).trim_end_matches(['\n', '\r']).to_string();
+            match read_line(&mut stdin.lock(), &mut skip_lf) {
+                Ok(None) => break,
+                Ok(Some(line)) => {
+                    let command = wafer_core::java_string::decode_utf8(&line).into_owned();
                     let has_level = OVERWORLD_CREATED.load(std::sync::atomic::Ordering::Acquire);
                     if events.send(Event::Console(command, has_level)).is_err() {
                         break;
@@ -218,6 +217,33 @@ pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
         }
         CONSOLE_THREAD_TERMINATED.store(true, std::sync::atomic::Ordering::Release);
     });
+}
+
+fn read_line(reader: &mut impl BufRead, skip_lf: &mut bool) -> io::Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    loop {
+        let buffer = reader.fill_buf()?;
+        if buffer.is_empty() {
+            return Ok((!line.is_empty()).then_some(line));
+        }
+        if std::mem::take(skip_lf) && buffer[0] == b'\n' {
+            reader.consume(1);
+            continue;
+        }
+        match buffer.iter().position(|&b| b == b'\n' || b == b'\r') {
+            Some(end) => {
+                line.extend_from_slice(&buffer[..end]);
+                *skip_lf = buffer[end] == b'\r';
+                reader.consume(end + 1);
+                return Ok(Some(line));
+            }
+            None => {
+                let length = buffer.len();
+                line.extend_from_slice(buffer);
+                reader.consume(length);
+            }
+        }
+    }
 }
 
 const GET_BY_NAME_FRAMES: [&str; 12] = [
@@ -285,5 +311,16 @@ mod tests {
         assert!(throwable.description.contains("nonexistent.invalid"), "{}", throwable.description);
         assert!(!throwable.description.contains("os error"), "{}", throwable.description);
         assert_eq!(throwable.stack_trace[8], "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:181)");
+    }
+
+    #[test]
+    fn console_lines_split_like_buffered_reader_read_line() {
+        let mut input = std::io::BufReader::with_capacity(2, &b"a\rb\r\nc\n\nd\r\re"[..]);
+        let mut skip_lf = false;
+        let mut lines = Vec::new();
+        while let Some(line) = super::read_line(&mut input, &mut skip_lf).unwrap() {
+            lines.push(String::from_utf8(line).unwrap());
+        }
+        assert_eq!(lines, ["a", "b", "c", "", "d", "", "e"]);
     }
 }

@@ -1,7 +1,7 @@
 use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, FixedOffset, Local, Months};
@@ -13,7 +13,13 @@ use crate::server::services::Services;
 
 const LOOKUP_GAME_PROFILE: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.lookupGameProfile(CachedUserNameToIdResolver.java:73)";
 const GET_BY_NAME: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.get(CachedUserNameToIdResolver.java:134)";
+const LOAD_FROM_JSON: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.load(CachedUserNameToIdResolver.java:167)";
+const INIT_LOAD: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.<init>(CachedUserNameToIdResolver.java:58)";
+const SERVICES_CREATE: &str = "net.minecraft.server.Services.create(Services.java:28)";
+const MAIN_SERVICES: &str = "net.minecraft.server.Main.main(Main.java:136)";
 const GAMEPROFILES_MRU_LIMIT: usize = 1000;
+
+static PRELOADED: std::sync::OnceLock<Arc<CachedUserNameToIdResolver>> = std::sync::OnceLock::new();
 const DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
 
 #[derive(Clone)]
@@ -50,15 +56,28 @@ impl CachedUserNameToIdResolver {
         let file = dir.map(|d| d.join("usercache.json"));
         let mut profiles = Profiles::default();
         if let Some(file) = &file
-            && let Ok(text) = std::fs::read_to_string(file)
+            && let Ok(bytes) = std::fs::read(file)
         {
-            match serde_json::from_str::<Value>(&wafer_core::java_string::from_code_points(&text)) {
-                Ok(Value::Array(entries)) => entries.iter().rev().filter_map(read_game_profile).for_each(|info| profiles.safe_add(info)),
-                Ok(_) => {}
-                Err(e) => warn!("Failed to load profile cache {}: {e}", file.display()),
+            let text = wafer_core::java_string::decode_utf8(&bytes);
+            let tail = [LOAD_FROM_JSON, INIT_LOAD, SERVICES_CREATE, MAIN_SERVICES, crate::server::main::BUNDLER_MAIN_TAIL[0], crate::server::main::BUNDLER_MAIN_TAIL[1]];
+            match crate::util::gson::from_json_array(&text, &tail) {
+                Ok(Some(entries)) => {
+                    let entries: Vec<Value> = entries.into_iter().map(crate::util::gson::to_value).collect();
+                    entries.iter().rev().filter_map(read_game_profile).for_each(|info| profiles.safe_add(info));
+                }
+                Ok(None) => {}
+                Err(throwable) => warn!("Failed to load profile cache {}\n{}", file.display(), throwable.print_stack_trace().trim_end()),
             }
         }
         CachedUserNameToIdResolver { file, profiles: Mutex::new(profiles), resolve_offline_users: AtomicBool::new(true) }
+    }
+
+    pub fn preload(dir: PathBuf) {
+        let _ = PRELOADED.set(Arc::new(CachedUserNameToIdResolver::load(Some(dir))));
+    }
+
+    pub fn shared(dir: Option<PathBuf>) -> Arc<CachedUserNameToIdResolver> {
+        PRELOADED.get().cloned().unwrap_or_else(|| Arc::new(CachedUserNameToIdResolver::load(dir)))
     }
 
     pub fn set_resolve_offline_users(&self, value: bool) {

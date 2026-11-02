@@ -1,6 +1,7 @@
 pub mod argb;
 pub mod basic_file_attributes;
 pub mod block_util;
+pub mod buffered_writer;
 pub mod brightness;
 pub mod cached_thread_pool;
 pub mod codec;

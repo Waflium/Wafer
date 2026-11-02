@@ -52,14 +52,14 @@ impl StringTemplate {
             Ok(())
         };
         for (segment, argument) in self.segments.iter().zip(arguments) {
-            builder.push_str(segment);
-            builder.push_str(argument);
+            wafer_core::java_string::push_str(&mut builder, segment);
+            wafer_core::java_string::push_str(&mut builder, argument);
             units += segment.java_utf16().count() + argument.java_utf16().count();
             check(units, &builder)?;
         }
         if self.segments.len() > self.variables.len() {
             let last = self.segments.last().unwrap();
-            builder.push_str(last);
+            wafer_core::java_string::push_str(&mut builder, last);
             units += last.java_utf16().count();
         }
         check(units, &builder)?;

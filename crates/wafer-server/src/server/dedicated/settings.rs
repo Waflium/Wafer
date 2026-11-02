@@ -30,14 +30,16 @@ impl Properties {
         self.map.remove(key)
     }
 
-    pub fn load(text: &str) -> Properties {
+    pub fn load(text: &str) -> Result<Properties, MalformedEscape> {
         let mut properties = Properties::default();
         let mut reader = LineReader { chars: text.chars().collect(), position: 0 };
         while let Some(line) = reader.read_line() {
             let (key, value) = split_logical_line(&line);
-            properties.map.insert(unescape(&key), unescape(&value));
+            let key = unescape(&key).map_err(|load_convert_line| MalformedEscape { load_convert_line, load0_line: 457 })?;
+            let value = unescape(&value).map_err(|load_convert_line| MalformedEscape { load_convert_line, load0_line: 458 })?;
+            properties.map.insert(key, value);
         }
-        properties
+        Ok(properties)
     }
 
     pub fn store(&self, comments: &str, escape_unicode: bool) -> String {
@@ -49,7 +51,7 @@ impl Properties {
         out.push_str(&java_date_string());
         out.push_str(LINE_SEPARATOR);
         let mut keys: Vec<&String> = self.map.keys().collect();
-        keys.sort();
+        keys.sort_by(|a, b| utf16_units(a).cmp(utf16_units(b)));
         for key in keys {
             out.push_str(&save_convert(key, true, escape_unicode));
             out.push('=');
@@ -168,33 +170,66 @@ fn split_logical_line(line: &str) -> (String, String) {
     (chars[..key_len].iter().collect(), chars[value_start.min(chars.len())..].iter().collect())
 }
 
-fn unescape(input: &str) -> String {
-    let chars: Vec<char> = input.chars().collect();
-    let mut out: Vec<u16> = Vec::with_capacity(input.len());
+pub struct MalformedEscape {
+    load_convert_line: u32,
+    load0_line: u32,
+}
+
+impl MalformedEscape {
+    pub fn print_stack_trace(&self, load_from_file_line: u32) -> String {
+        format!(
+            "java.lang.IllegalArgumentException: Malformed \\uxxxx encoding.\n\
+             \tat java.base/java.util.Properties.loadConvert(Properties.java:{})\n\
+             \tat java.base/java.util.Properties.load0(Properties.java:{})\n\
+             \tat java.base/java.util.Properties.load(Properties.java:384)\n\
+             \tat net.minecraft.server.dedicated.Settings.loadFromFile(Settings.java:{load_from_file_line})\n\
+             \tat net.minecraft.server.dedicated.DedicatedServerProperties.fromFile(DedicatedServerProperties.java:156)\n\
+             \tat net.minecraft.server.dedicated.DedicatedServerSettings.<init>(DedicatedServerSettings.java:12)\n\
+             \tat net.minecraft.server.Main.main(Main.java:117)\n\
+             \tat {}\n\
+             \tat {}",
+            self.load_convert_line,
+            self.load0_line,
+            crate::server::main::BUNDLER_MAIN_TAIL[0],
+            crate::server::main::BUNDLER_MAIN_TAIL[1],
+        )
+    }
+}
+
+fn unescape(input: &str) -> Result<String, u32> {
+    let units: Vec<u16> = utf16_units(input).collect();
+    let mut out: Vec<u16> = Vec::with_capacity(units.len());
     let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
+    while i < units.len() {
+        let c = units[i];
         i += 1;
-        if c != '\\' {
-            out.extend(utf16_units(c.encode_utf8(&mut [0; 4])));
+        if c != b'\\' as u16 {
+            out.push(c);
             continue;
         }
-        let Some(&next) = chars.get(i) else { break };
+        let Some(&next) = units.get(i) else { break };
         i += 1;
         match next {
-            'u' => {
-                let hex: String = chars[i..(i + 4).min(chars.len())].iter().collect();
+            0x75 => {
+                if i + 4 > units.len() {
+                    return Err(655);
+                }
+                let mut value = 0u16;
+                for &digit in &units[i..i + 4] {
+                    let digit = char::from_u32(digit as u32).and_then(|c| c.to_digit(16)).filter(|_| digit < 0x80).ok_or(664u32)?;
+                    value = (value << 4) + digit as u16;
+                }
                 i += 4;
-                out.push(u16::from_str_radix(&hex, 16).unwrap_or(0));
+                out.push(value);
             }
-            't' => out.push(b'\t' as u16),
-            'r' => out.push(b'\r' as u16),
-            'n' => out.push(b'\n' as u16),
-            'f' => out.push(0x0c),
-            other => out.extend(utf16_units(other.encode_utf8(&mut [0; 4]))),
+            0x74 => out.push(b'\t' as u16),
+            0x72 => out.push(b'\r' as u16),
+            0x6E => out.push(b'\n' as u16),
+            0x66 => out.push(0x0c),
+            other => out.push(other),
         }
     }
-    from_utf16(&out)
+    Ok(from_utf16(&out))
 }
 
 fn save_convert(input: &str, escape_space: bool, escape_unicode: bool) -> String {
@@ -265,19 +300,19 @@ pub fn java_io_exception(error: &io::Error, path: &Path) -> String {
     }
 }
 
-pub fn load_from_file(path: &Path) -> Properties {
+pub fn load_from_file(path: &Path) -> Result<Properties, String> {
     let bytes = match std::fs::read(path) {
         Ok(bytes) => bytes,
         Err(e) => {
             error!("Failed to load properties from file: {}\n{}", path.display(), java_io_exception(&e, path));
-            return Properties::default();
+            return Ok(Properties::default());
         }
     };
     match std::str::from_utf8(&bytes) {
-        Ok(text) => Properties::load(&wafer_core::java_string::from_code_points(text)),
+        Ok(text) => Properties::load(&wafer_core::java_string::from_code_points(text)).map_err(|e| e.print_stack_trace(68)),
         Err(_) => {
             info!("Failed to load properties as UTF-8 from file {}, trying ISO_8859_1", path.display());
-            Properties::load(&bytes.iter().map(|&b| b as char).collect::<String>())
+            Properties::load(&bytes.iter().map(|&b| b as char).collect::<String>()).map_err(|e| e.print_stack_trace(75))
         }
     }
 }
@@ -290,33 +325,14 @@ pub fn store_to_file(properties: &Properties, path: &Path) {
     }
 }
 
-const BUFFERED_WRITER_CHARS: usize = 8192;
-
 fn buffered_writer_bytes(content: &str) -> (Vec<u8>, bool) {
     if !wafer_core::java_string::contains_lone_surrogate(content) {
         return (content.as_bytes().to_vec(), false);
     }
-    let units: Vec<u16> = utf16_units(content).collect();
-    let mut malformed = None;
-    let mut index = 0;
-    for decoded in char::decode_utf16(units.iter().copied()) {
-        match decoded {
-            Ok(c) => index += c.len_utf16(),
-            Err(_) => {
-                malformed = Some(index);
-                break;
-            }
-        }
-    }
-    let Some(malformed) = malformed else { return (wafer_core::java_string::to_utf8_lossy(content).into_owned().into_bytes(), false) };
-    let encode = |units: &[u16]| wafer_core::java_string::to_utf8_lossy(&from_utf16(units)).into_owned().into_bytes();
-    let mut bytes = encode(&units[..malformed]);
-    let chunk_start = malformed / BUFFERED_WRITER_CHARS * BUFFERED_WRITER_CHARS;
-    let paired_with_leftover = chunk_start > 0 && (0xDC00..=0xDFFF).contains(&units[chunk_start]) && (0xD800..=0xDBFF).contains(&units[chunk_start - 1]);
-    if !paired_with_leftover {
-        bytes.extend(encode(&units[chunk_start..malformed]));
-    }
-    (bytes, true)
+    let mut writer = crate::util::buffered_writer::BufferedWriter::default();
+    let stored = writer.write(content).and_then(|()| writer.flush());
+    let closed = writer.close();
+    (writer.into_bytes(), stored.is_err() || closed.is_err())
 }
 
 pub struct Settings {
@@ -362,7 +378,7 @@ mod tests {
 
     #[test]
     fn loads_like_java_properties() {
-        let p = Properties::load("# c\n! c\n  key1 = value one  \nkey2:v2\nkey3 v3\nlevel-type=minecraft\\:flat\nlong = a\\\n    b\nunicode=\\u0041\\t\n\nempty=\n");
+        let p = Properties::load("# c\n! c\n  key1 = value one  \nkey2:v2\nkey3 v3\nlevel-type=minecraft\\:flat\nlong = a\\\n    b\nunicode=\\u0041\\t\n\nempty=\n").ok().unwrap();
         assert_eq!(p.get("key1"), Some("value one  "));
         assert_eq!(p.get("key2"), Some("v2"));
         assert_eq!(p.get("key3"), Some("v3"));
@@ -387,8 +403,11 @@ mod tests {
 
     #[test]
     fn surrogate_escapes_load_as_utf16_units() {
-        let p = Properties::load("motd=M\\uDBF6\\uDC00N\\uD800O\nemoji=\\uD83D\\uDE00");
-        assert_eq!(p.get("motd").unwrap().java_utf16().collect::<Vec<_>>(), [0x4D, 0xDBF6, 0xDC00, 0x4E, 0xD800, 0x4F]);
+        let p = Properties::load("motd=M\\uDBF6\\uDC00N\\uD800O\nemoji=\\uD83D\\uDE00").ok().unwrap();
+        let malformed = |text: &str| Properties::load(text).err().map(|e| (e.load_convert_line, e.load0_line));
+        assert_eq!(malformed("mo\\u12=x"), Some((655, 457)));
+        assert_eq!(malformed("motd=a\\u12G4b"), Some((664, 458)));
+        assert_eq!(malformed("motd=a\\u12\u{1F600}"), Some((664, 458)));        assert_eq!(p.get("motd").unwrap().java_utf16().collect::<Vec<_>>(), [0x4D, 0xDBF6, 0xDC00, 0x4E, 0xD800, 0x4F]);
         assert_eq!(p.get("emoji"), Some("\u{1F600}"));
     }
 

@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::{Data, OpCode};
+use tokio_tungstenite::tungstenite::protocol::frame::coding::{Control, Data, OpCode};
 use tokio_tungstenite::tungstenite::protocol::{Role, WebSocketConfig};
 
 use super::gson;
@@ -294,7 +294,7 @@ impl Connection {
                     }
                     let config = WebSocketConfig::default().max_message_size(Some(MAX_CONTENT_LENGTH)).max_frame_size(Some(MAX_CONTENT_LENGTH));
                     let websocket = WebSocketStream::from_partially_read(ReadBatch { stream, open: true }, codec.into_remaining(), Role::Server, Some(config)).await;
-                    self.websocket(websocket).await
+                    self.websocket(websocket, tls).await
                 }
                 Handshake::Hixie(response) => {
                     if let Err(e) = stream.write_all(&response).await {
@@ -306,12 +306,12 @@ impl Connection {
         }
     }
 
-    async fn websocket<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(&self, mut websocket: WebSocketStream<ReadBatch<S>>) -> Closed {
+    async fn websocket<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(&self, mut websocket: WebSocketStream<ReadBatch<S>>, tls: bool) -> Closed {
         let (sender, mut notifications) = mpsc::unbounded_channel::<Arc<str>>();
         self.server.on_connected(self.client.connection_id, sender);
         loop {
             while let Some(message) = websocket.next().now_or_never() {
-                if let Some(closed) = self.on_websocket_message(&mut websocket, message).await {
+                if let Some(closed) = self.on_websocket_message(&mut websocket, message, tls).await {
                     return closed;
                 }
             }
@@ -324,7 +324,7 @@ impl Connection {
             tokio::select! {
                 biased;
                 message = websocket.next() => {
-                    if let Some(closed) = self.on_websocket_message(&mut websocket, message).await {
+                    if let Some(closed) = self.on_websocket_message(&mut websocket, message, tls).await {
                         return closed;
                     }
                 }
@@ -344,8 +344,14 @@ impl Connection {
         &self,
         websocket: &mut WebSocketStream<ReadBatch<S>>,
         message: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
+        tls: bool,
     ) -> Option<Closed> {
         match message {
+            Some(Err(tokio_tungstenite::tungstenite::Error::Utf8)) => {
+                let _ = websocket.send(close_frame(1007, "bytes are not UTF-8")).await;
+                let _ = websocket.send(close_frame(1000, "Bye")).await;
+                Some(Closed::Exception(invalid_utf8_exception(tls)))
+            }
             Some(Ok(Message::Text(text))) => match self.handle_text(&wafer_core::java_string::from_code_points(text.as_str())).await {
                 Some(Ok(response)) => websocket.send(text_message(&response)).await.is_err().then_some(Closed::Cleanly),
                 Some(Err(exception)) => Some(Closed::Exception(exception)),
@@ -690,6 +696,36 @@ fn take_hixie_frame(buffer: &mut Vec<u8>) -> Option<HixieFrame> {
         None if buffer.len() - 1 > HIXIE_MAX_FRAME_SIZE => Some(HixieFrame::TooLong),
         None => None,
     }
+}
+
+const UTF8_VALIDATOR_FRAMES: [&str; 13] = [
+    "io.netty.handler.codec.http.websocketx.Utf8Validator.process(Utf8Validator.java:101)",
+    "io.netty.buffer.AbstractByteBuf.forEachByteAsc0(AbstractByteBuf.java:1308)",
+    "io.netty.buffer.AbstractByteBuf.forEachByte(AbstractByteBuf.java:1288)",
+    "io.netty.handler.codec.http.websocketx.Utf8Validator.check(Utf8Validator.java:73)",
+    "io.netty.handler.codec.http.websocketx.Utf8FrameValidator.checkUTF8String(Utf8FrameValidator.java:105)",
+    "io.netty.handler.codec.http.websocketx.Utf8FrameValidator.channelRead(Utf8FrameValidator.java:68)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:357)",
+    "io.netty.channel.ChannelInboundHandlerAdapter.channelRead(ChannelInboundHandlerAdapter.java:93)",
+    "net.minecraft.server.jsonrpc.security.AuthenticationHandler.channelRead(AuthenticationHandler.java:63)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:355)",
+    "io.netty.handler.codec.ByteToMessageDecoder.fireChannelRead(ByteToMessageDecoder.java:361)",
+    "io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:325)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:357)",
+];
+
+fn invalid_utf8_exception(tls: bool) -> String {
+    let ssl_unwrap: &[&str] = if tls { &SSL_HANDLER_UNWRAP_FRAMES } else { &[] };
+    [&UTF8_VALIDATOR_FRAMES[..], ssl_unwrap, &PIPELINE_READ_FRAMES, &NETTY_READ_FRAMES[7..]]
+        .concat()
+        .iter()
+        .fold("io.netty.handler.codec.http.websocketx.CorruptedWebSocketFrameException: bytes are not UTF-8".to_string(), |trace, frame| format!("{trace}\n\tat {frame}"))
+}
+
+fn close_frame(code: u16, reason: &str) -> Message {
+    let mut payload = code.to_be_bytes().to_vec();
+    payload.extend_from_slice(reason.as_bytes());
+    Message::Frame(Frame::message(payload, OpCode::Control(Control::Close), true))
 }
 
 fn text_message(text: &str) -> Message {

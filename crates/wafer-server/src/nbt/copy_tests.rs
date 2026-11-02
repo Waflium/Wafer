@@ -157,6 +157,25 @@ fn typed_entity_data_of_strips_the_id_from_a_copy() {
 }
 
 #[test]
+fn block_state_properties_keep_their_map_order_on_the_network() {
+    let mut w = Writer::new();
+    w.varint(3);
+    for (key, value) in [("waterlogged", "true"), ("mode", "start"), ("honey_level", "3")] {
+        w.string(key);
+        w.string(value);
+    }
+    let read = dc::BLOCK_STATE.read(&mut Reader::new(w.as_slice())).unwrap();
+    let Nbt::Compound(fields) = &read else { panic!("not a compound") };
+    assert_eq!(fields.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["waterlogged", "honey_level", "mode"]);
+    let mut out = Writer::new();
+    dc::BLOCK_STATE.write(&read, &mut out).unwrap();
+    let mut r = Reader::new(out.as_slice());
+    assert_eq!(r.varint().unwrap(), 3);
+    let written: Vec<String> = (0..3).map(|_| (r.string(32767).unwrap().into_owned(), r.string(32767).unwrap()).0).collect();
+    assert_eq!(written, ["waterlogged", "honey_level", "mode"]);
+}
+
+#[test]
 fn codec_to_json_walks_the_compound_in_hash_map_order() {
     let tag = Nbt::Compound(grown(&["ax", "h", "i", "kc", "n7", "n24", "n3", "n13"]));
     let json = crate::util::codec::to_json(&tag);

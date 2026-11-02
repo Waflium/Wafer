@@ -16,6 +16,7 @@ const COMPOUND_TAG_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.nbt.Compound
 const LIST_TAG_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.nbt.ListTag.write(ListTag.java:193)")];
 const WRITE_ANY_TAG: Frame = Frame::Fixed("net.minecraft.nbt.NbtIo.writeAnyTag(NbtIo.java:156)");
 const WRITE_NBT_CAUSE: Frame = Frame::Fixed("net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:459)");
+const READ_INDEX_THRESHOLD: usize = 32;
 const WRITE_NBT_WRAP: Frame = Frame::Fixed("net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:461)");
 
 #[derive(Clone, Debug)]
@@ -450,13 +451,31 @@ fn read_payload(r: &mut Reader, id: u8, depth: u32) -> Result<Nbt, DecodeError> 
         }
         10 => {
             let mut fields = TagMap::new();
+            let mut index: Option<wafer_core::hash_map::FastMap<String, usize>> = None;
             loop {
                 let field = r.u8()?;
                 if field == 0 {
                     break;
                 }
                 let name = read_string(r)?;
-                fields.push((name, read_payload(r, field, depth + 1)?));
+                let tag = read_payload(r, field, depth + 1)?;
+                let existing = match &index {
+                    Some(index) => index.get(&name).copied(),
+                    None => fields.entries.iter().position(|(key, _)| *key == name),
+                };
+                match existing {
+                    Some(position) => fields.entries[position].1 = tag,
+                    None => {
+                        if let Some(index) = &mut index {
+                            index.insert(name.clone(), fields.entries.len());
+                        } else if fields.entries.len() >= READ_INDEX_THRESHOLD {
+                            let mut built: wafer_core::hash_map::FastMap<String, usize> = fields.entries.iter().enumerate().map(|(i, (key, _))| (key.clone(), i)).collect();
+                            built.insert(name.clone(), fields.entries.len());
+                            index = Some(built);
+                        }
+                        fields.entries.push((name, tag));
+                    }
+                }
             }
             Nbt::Compound(fields)
         }
@@ -541,6 +560,36 @@ mod tests {
 
     fn keys(fields: &TagMap) -> Vec<&str> {
         fields.iteration().map(|(key, _)| key.as_str()).collect()
+    }
+
+    fn read_compound(entries: &[(String, i32)]) -> TagMap {
+        let mut w = Writer::new();
+        w.u8(10);
+        for (key, value) in entries {
+            w.u8(3);
+            write_string(&mut w, key, None);
+            w.i32(*value);
+        }
+        w.u8(0);
+        let Nbt::Compound(fields) = Nbt::read(&mut Reader::new(w.as_slice())).unwrap() else { panic!("not a compound") };
+        fields
+    }
+
+    #[test]
+    fn duplicate_keys_keep_the_first_position_and_the_last_value() {
+        let fields = read_compound(&[("a".into(), 1), ("b".into(), 2), ("a".into(), 3)]);
+        assert_eq!(*fields, [("a".to_string(), Nbt::Int(3)), ("b".to_string(), Nbt::Int(2))]);
+        let mut many: Vec<(String, i32)> = (0..40).map(|i| (format!("k{i}"), i)).collect();
+        many.push(("k5".into(), 99));
+        many.push(("k39".into(), 100));
+        let fields = read_compound(&many);
+        assert_eq!(fields.len(), 40);
+        assert_eq!(fields[5], ("k5".to_string(), Nbt::Int(99)));
+        assert_eq!(fields[39], ("k39".to_string(), Nbt::Int(100)));
+        assert_eq!(
+            keys(&fields).join(","),
+            "k31,k30,k11,k33,k10,k32,k13,k35,k12,k34,k15,k37,k14,k36,k17,k39,k16,k38,k19,k18,k0,k1,k2,k3,k20,k4,k5,k22,k6,k21,k7,k24,k8,k23,k9,k26,k25,k28,k27,k29"
+        );
     }
 
     #[test]

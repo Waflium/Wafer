@@ -10,7 +10,7 @@ pub struct DedicatedServerSettings {
 
 impl DedicatedServerSettings {
     pub fn new(source: &Path) -> Result<DedicatedServerSettings, InvalidProperty> {
-        let properties = DedicatedServerProperties::new(settings::load_from_file(source))?;
+        let properties = DedicatedServerProperties::new(settings::load_from_file(source).map_err(InvalidProperty)?)?;
         Ok(DedicatedServerSettings { source: source.to_path_buf(), properties })
     }
 

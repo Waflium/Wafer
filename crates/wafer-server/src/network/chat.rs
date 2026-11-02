@@ -21,6 +21,8 @@ pub mod signed_message_link;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use wafer_core::java_string;
+
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::selector::entity_selector::EntitySelector;
@@ -644,17 +646,17 @@ impl Component {
 
     fn append_string(&self, out: &mut String) {
         match &self.contents {
-            Contents::Literal(text) => out.push_str(text),
+            Contents::Literal(text) => java_string::push_str(out, text),
             Contents::Nbt(tag) => append_nbt_string(tag, out),
             Contents::Translatable { key, fallback, args } => {
                 let format = language().get(key.as_str()).map(String::as_str).or(fallback.as_deref()).unwrap_or(key);
                 match decompose(format, args) {
-                    Some(text) => out.push_str(&text),
-                    None => out.push_str(format),
+                    Some(text) => java_string::push_str(out, &text),
+                    None => java_string::push_str(out, format),
                 }
             }
-            Contents::Keybind(keybind) => out.push_str(keybind),
-            Contents::Selector { pattern, .. } => out.push_str(pattern),
+            Contents::Keybind(keybind) => java_string::push_str(out, keybind),
+            Contents::Selector { pattern, .. } => java_string::push_str(out, pattern),
             Contents::Other(fields) => {
                 let field = |name: &str| fields.iter().find(|(k, _)| k == name).map(|(_, v)| v);
                 if let Some(fallback) = field("fallback") {
@@ -676,12 +678,12 @@ impl Component {
 
 fn append_nbt_string(tag: &Nbt, out: &mut String) {
     match tag {
-        Nbt::String(s) => out.push_str(s),
+        Nbt::String(s) => java_string::push_str(out, s),
         Nbt::Compound(_) => {
             if let Some(text) = tag.get("text").and_then(Nbt::as_str) {
-                out.push_str(text);
+                java_string::push_str(out, text);
             } else if let Some(key) = tag.get("translate").and_then(Nbt::as_str) {
-                out.push_str(language().get(key).map_or(key, String::as_str));
+                java_string::push_str(out, language().get(key).map_or(key, String::as_str));
             }
             for sibling in tag.get("extra").map(Nbt::as_list).unwrap_or(&[]) {
                 append_nbt_string(sibling, out);
@@ -729,7 +731,7 @@ fn decompose(template: &str, args: &[Arg]) -> Option<String> {
     let mut chars = template.char_indices().peekable();
     while let Some((_, c)) = chars.next() {
         if c != '%' {
-            out.push(c);
+            java_string::push_char(&mut out, c);
             continue;
         }
         let mut digits = String::new();
@@ -759,7 +761,7 @@ fn decompose(template: &str, args: &[Arg]) -> Option<String> {
                         next - 1
                     }
                 };
-                out.push_str(&args.get(index)?.plain());
+                java_string::push_str(&mut out, &args.get(index)?.plain());
             }
             _ => return None,
         }

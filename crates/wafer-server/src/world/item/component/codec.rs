@@ -1169,8 +1169,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
         Stream::Map(ks, vs, max) => {
             let (Codec::Map(kc, vc), Nbt::Compound(fields)) = (codec, value) else { return Err("not a map".into()) };
             write_count(w, fields.len(), *max)?;
-            for i in fields.iteration_order() {
-                let (k, v) = &fields[i];
+            for (k, v) in fields.iter() {
                 write(kc, ks, &Nbt::String(k.clone()), w)?;
                 write(vc, vs, v, w)?;
             }
@@ -1333,7 +1332,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
         Stream::Map(ks, vs, max) => {
             let Codec::Map(kc, vc) = codec else { return Err("not a map".into()) };
             let n = read_count(r, *max)?;
-            let mut fields = Vec::with_capacity(n.min(65536));
+            let mut map = crate::util::fastutil::ObjectOpenHashMap::with_expected(n.min(65536));
             for _ in 0..n {
                 let k = read(kc, ks, r)?;
                 let v = read(vc, vs, r)?;
@@ -1341,10 +1340,9 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
                     Nbt::String(k) => k,
                     _ => return Err("key is not a string".into()),
                 };
-                fields.retain(|(existing, _): &(String, Nbt)| *existing != k);
-                fields.push((k, v));
+                *map.entry_or_insert_with(&k, || Nbt::End) = v;
             }
-            Nbt::Compound(fields.into())
+            Nbt::Compound(map.iter().map(|(k, v)| (k.to_string(), v.clone())).collect())
         }
         Stream::Record => match codec {
             Codec::Record(fields) => {

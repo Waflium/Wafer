@@ -10,6 +10,8 @@ use serde_json::{Map, Value};
 use super::advancements::advancement_visibility_evaluator;
 use super::level::ServerLevel;
 use super::server_advancement_manager::ServerAdvancementManager;
+
+const SAVE_FRAMES: [&str; 2] = ["net.minecraft.server.PlayerAdvancements.save(PlayerAdvancements.java:137)", "net.minecraft.server.players.PlayerList.save(PlayerList.java:317)"];
 use crate::advancements::advancement_holder::AdvancementHolder;
 use crate::advancements::advancement_node::AdvancementNode;
 use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
@@ -126,12 +128,24 @@ impl PlayerAdvancements {
             }
         }
         map.insert("DataVersion".into(), Value::from(wafer_data::WORLD_VERSION));
-        let result = path
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|_| std::fs::write(path, wafer_core::java_string::to_utf8_lossy(&serde_json::to_string_pretty(&Value::Object(map)).expect("advancement json")).as_bytes()));
-        if let Err(error) = result {
-            error!("Couldn't save player advancements to {}\n{error}", path.display());
+        let content = serde_json::to_string_pretty(&Value::Object(map)).expect("advancement json");
+        let mut writer = crate::util::buffered_writer::BufferedWriter::default();
+        let mut encoded = writer.write(&content);
+        if let Err(close) = writer.close() {
+            match &mut encoded {
+                Ok(()) => encoded = Err(close),
+                Err(primary) => primary.add_suppressed(close),
+            }
+        }
+        let result = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(path, writer.into_bytes()));
+        match (result, encoded) {
+            (Err(error), _) => error!("Couldn't save player advancements to {}\n{error}", path.display()),
+            (Ok(()), Err(mut failure)) => {
+                failure.push_frames(&SAVE_FRAMES);
+                failure.push_frames(&crate::server::main_thread_frames::current());
+                error!("Couldn't save player advancements to {}\n{}", path.display(), failure.print_stack_trace().trim_end());
+            }
+            (Ok(()), Ok(())) => {}
         }
     }
 

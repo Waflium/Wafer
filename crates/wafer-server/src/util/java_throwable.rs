@@ -15,11 +15,16 @@ pub struct JavaThrowable {
     pub stack_trace: Vec<&'static str>,
     pub cause: Option<Box<JavaThrowable>>,
     pub report: Option<ThrowableReport>,
+    pub suppressed: Vec<JavaThrowable>,
 }
 
 impl JavaThrowable {
     pub fn new(description: impl Into<String>, stack_trace: Vec<&'static str>) -> JavaThrowable {
-        JavaThrowable { description: description.into(), stack_trace, cause: None, report: None }
+        JavaThrowable { description: description.into(), stack_trace, cause: None, report: None, suppressed: Vec::new() }
+    }
+
+    pub fn add_suppressed(&mut self, exception: JavaThrowable) {
+        self.suppressed.push(exception);
     }
 
     pub fn from_panic(message: &str) -> JavaThrowable {
@@ -132,10 +137,11 @@ impl JavaThrowable {
         for frame in &self.stack_trace {
             let _ = write!(out, "\tat {frame}{separator}");
         }
-        let mut enclosing = self;
-        while let Some(cause) = enclosing.cause.as_deref() {
-            print_enclosed_stack_trace(cause, &enclosing.stack_trace, &mut out, separator);
-            enclosing = cause;
+        for suppressed in &self.suppressed {
+            print_enclosed_stack_trace(suppressed, &self.stack_trace, "Suppressed: ", "\t", &mut out, separator);
+        }
+        if let Some(cause) = self.cause.as_deref() {
+            print_enclosed_stack_trace(cause, &self.stack_trace, "Caused by: ", "", &mut out, separator);
         }
         out
     }
@@ -149,7 +155,7 @@ impl std::fmt::Display for JavaThrowable {
 
 impl std::error::Error for JavaThrowable {}
 
-fn print_enclosed_stack_trace(throwable: &JavaThrowable, enclosing_trace: &[&'static str], out: &mut String, separator: &str) {
+fn print_enclosed_stack_trace(throwable: &JavaThrowable, enclosing_trace: &[&'static str], caption: &str, prefix: &str, out: &mut String, separator: &str) {
     let trace = &throwable.stack_trace;
     let mut m = trace.len() as isize - 1;
     let mut n = enclosing_trace.len() as isize - 1;
@@ -158,14 +164,19 @@ fn print_enclosed_stack_trace(throwable: &JavaThrowable, enclosing_trace: &[&'st
         n -= 1;
     }
     let frames_in_common = trace.len() as isize - 1 - m;
-    out.push_str("Caused by: ");
-    out.push_str(&throwable.description);
-    out.push_str(separator);
+    let _ = write!(out, "{prefix}{caption}{}{separator}", throwable.description);
     for frame in &trace[..(m + 1) as usize] {
-        let _ = write!(out, "\tat {frame}{separator}");
+        let _ = write!(out, "{prefix}\tat {frame}{separator}");
     }
     if frames_in_common != 0 {
-        let _ = write!(out, "\t... {frames_in_common} more{separator}");
+        let _ = write!(out, "{prefix}\t... {frames_in_common} more{separator}");
+    }
+    let nested = format!("{prefix}\t");
+    for suppressed in &throwable.suppressed {
+        print_enclosed_stack_trace(suppressed, trace, "Suppressed: ", &nested, out, separator);
+    }
+    if let Some(cause) = throwable.cause.as_deref() {
+        print_enclosed_stack_trace(cause, trace, "Caused by: ", prefix, out, separator);
     }
 }
 

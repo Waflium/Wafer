@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
@@ -14,6 +14,7 @@ use crate::commands::source::{CommandResultCallback, CommandSource, CommandSourc
 use crate::commands::{CommandFn, CustomCommandFn};
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
+use crate::util::buffered_writer::BufferedWriter;
 
 #[cfg(windows)]
 const LINE_SEPARATOR: &str = "\r\n";
@@ -72,14 +73,22 @@ fn stop(server: &mut Server, _context: &CommandContext, source: &CommandSourceSt
 }
 
 pub struct Tracer {
-    output: BufWriter<File>,
+    output: BufferedWriter,
+    file: File,
     last_indent: i32,
     waiting_for_result: bool,
 }
 
+impl Drop for Tracer {
+    fn drop(&mut self) {
+        let _ = self.output.close();
+        let _ = self.file.write_all(&self.output.take_bytes());
+    }
+}
+
 impl Tracer {
     fn write(&mut self, text: &str) {
-        let _ = self.output.write_all(wafer_core::java_string::to_utf8_lossy(text).as_bytes());
+        self.output.print(text);
     }
 
     fn println(&mut self, text: &str) {
@@ -120,7 +129,9 @@ impl Tracer {
             self.waiting_for_result = false;
         } else {
             self.indent_and_save(depth);
-            self.write(&format!("[R = {result}] "));
+            self.write("[R = ");
+            self.write(&result.to_string());
+            self.write("] ");
             self.println(command);
         }
     }
@@ -169,7 +180,7 @@ fn trace_guarded(server: &mut Server, source: &CommandSourceStack, current_step:
     let dir_path = Path::new("debug");
     match std::fs::create_dir_all(dir_path).and_then(|_| File::create(dir_path.join(&output_name))) {
         Ok(file) => {
-            ExecutionContext::with(|context| context.set_tracer(Tracer { output: BufWriter::new(file), last_indent: 0, waiting_for_result: false }));
+            ExecutionContext::with(|context| context.set_tracer(Tracer { output: BufferedWriter::default(), file, last_indent: 0, waiting_for_result: false }));
             for function in &functions {
                 match function.instantiate(None) {
                     Ok(instantiated_function) => {

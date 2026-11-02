@@ -10,12 +10,10 @@ pub struct Eula {
 
 impl Eula {
     pub fn new(file: &Path) -> Eula {
-        let agreed = match std::fs::read(file) {
-            Ok(bytes) => {
-                let text: String = bytes.iter().map(|&b| b as char).collect();
-                Properties::load(&text).get("eula").unwrap_or("false").eq_ignore_ascii_case("true")
-            }
-            Err(_) => {
+        let properties = std::fs::read(file).ok().and_then(|bytes| Properties::load(&bytes.iter().map(|&b| b as char).collect::<String>()).ok());
+        let agreed = match properties {
+            Some(properties) => properties.get("eula").unwrap_or("false").eq_ignore_ascii_case("true"),
+            None => {
                 warn!("Failed to load {}", file.display());
                 save_defaults(file);
                 false

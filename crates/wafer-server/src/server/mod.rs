@@ -565,7 +565,7 @@ impl Server {
             level.game_time = game_time;
             level.chunks.game_time = game_time;
         }
-        let name_to_id_cache = CachedUserNameToIdResolver::load(config.server_dir.clone());
+        let name_to_id_cache = CachedUserNameToIdResolver::shared(config.server_dir.clone());
         name_to_id_cache.save();
         let lists = match player_lists {
             Some(lists) => lists,
@@ -649,7 +649,7 @@ impl Server {
             allow_commands,
             singleplayer_uuid,
             scheduled_events,
-            name_to_id_cache: Arc::new(name_to_id_cache),
+            name_to_id_cache,
             profile_resolver: Arc::default(),
             task_sender: None,
             custom_boss_events,
@@ -2450,7 +2450,7 @@ pub fn run(
         warn!("To change this, set \"online-mode\" to \"true\" in the server.properties file.");
     }
     if let Some(server_directory) = &config.server_dir {
-        let name_to_id_cache = CachedUserNameToIdResolver::load(Some(server_directory.clone()));
+        let name_to_id_cache = CachedUserNameToIdResolver::shared(Some(server_directory.clone()));
         let old_users_converter = players::old_users_converter::OldUsersConverter {
             server_directory,
             world_directory: config.world.as_deref(),

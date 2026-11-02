@@ -20,8 +20,7 @@ pub fn set_mode_on_stack(item_stack: &mut ItemStack, mode: TestBlockMode) {
         Some(wafer_protocol::nbt::Nbt::Compound(properties)) => properties.clone(),
         _ => Vec::new().into(),
     };
-    properties.retain(|(name, _)| name != "mode");
-    properties.push(("mode".into(), wafer_protocol::nbt::Nbt::String(mode.name().into())));
+    properties.put("mode", wafer_protocol::nbt::Nbt::String(mode.name().into()));
     item_stack.set(dc::BLOCK_STATE, Some(wafer_protocol::nbt::Nbt::Compound(properties)));
 }
 

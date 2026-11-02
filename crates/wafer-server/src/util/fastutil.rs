@@ -36,6 +36,11 @@ fn start_slot(hash: i32, mask: usize) -> usize {
 }
 
 impl<V> ObjectOpenHashMap<V> {
+    pub fn with_expected(expected: usize) -> ObjectOpenHashMap<V> {
+        let n = array_size(expected, DEFAULT_LOAD_FACTOR);
+        ObjectOpenHashMap { slots: empty_slots(n), size: 0, max_fill: max_fill(n, DEFAULT_LOAD_FACTOR) }
+    }
+
     pub fn len(&self) -> usize {
         self.size
     }

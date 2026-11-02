@@ -220,7 +220,7 @@ impl WorldDir {
         crate::util::safe_replace_or_move_file(&self.level_dat(), &self.old_level_dat(), &self.corrupted_level_dat(), true)
     }
     pub fn player_advancements(&self, uuid: u128) -> PathBuf {
-        self.root.join("players/advancements").join(format!("{}.json", format_uuid(uuid)))
+        self.root.join("players").join("advancements").join(format!("{}.json", format_uuid(uuid)))
     }
     pub fn icon_file(&self) -> PathBuf {
         self.root.join("icon.png")
@@ -256,7 +256,7 @@ impl WorldDir {
         self.root.join("dimensions").join(ns).join(path).join("poi")
     }
     pub fn player(&self, uuid: u128) -> PathBuf {
-        self.root.join("players/data").join(format!("{}.dat", format_uuid(uuid)))
+        self.root.join("players").join("data").join(format!("{}.dat", format_uuid(uuid)))
     }
     pub fn player_stats_dir(&self) -> PathBuf {
         self.root.join("players").join("stats")

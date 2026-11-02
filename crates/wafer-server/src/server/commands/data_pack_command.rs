@@ -15,6 +15,7 @@ use crate::server::Server;
 use crate::server::packs::metadata::PackFormat;
 use crate::server::packs::repository::Pack;
 use crate::server::packs::{PackSource, escape_if_required};
+use crate::util::buffered_writer::BufferedWriter;
 use crate::util::file_util::{is_path_part_portable, is_valid_path_segment};
 use crate::world::flag::print_missing_flags;
 
@@ -82,18 +83,47 @@ fn create_pack(server: &mut Server, context: &CommandContext, source: &CommandSo
     }
     let format = PackFormat::CURRENT.major;
     let top_mcmeta: Value = json!({ "pack": { "description": description.to_json_value(), "min_format": format, "max_format": format } });
+    let mut writer = BufferedWriter::default();
+    let mut encoded = writer.write(&serde_json::to_string_pretty(&top_mcmeta).unwrap()).map_err(|mut failure| {
+        failure.push_frames(&JSON_WRITER_WRITE_FRAMES);
+        failure
+    });
+    if let Err(mut failure) = writer.close() {
+        failure.push_frames(&JSON_WRITER_CLOSE_FRAMES);
+        match &mut encoded {
+            Ok(()) => encoded = Err(failure),
+            Err(primary) => primary.add_suppressed(failure),
+        }
+    }
     let written = std::fs::create_dir(&pack_dir)
         .and_then(|_| std::fs::create_dir(pack_dir.join("data")))
-        .and_then(|_| std::fs::write(pack_dir.join("pack.mcmeta"), wafer_core::java_string::to_utf8_lossy(&serde_json::to_string_pretty(&top_mcmeta).unwrap()).as_bytes()));
-    if let Err(e) = written {
-        let absolute = std::path::absolute(&datapack_dir).unwrap_or(datapack_dir);
-        warn!("Failed to create pack at {}\njava.io.IOException: {e}", absolute.display());
+        .and_then(|_| std::fs::write(pack_dir.join("pack.mcmeta"), writer.into_bytes()));
+    let failure = match (written, encoded) {
+        (Err(e), _) => Some(format!("java.io.IOException: {e}")),
+        (Ok(()), Err(mut failure)) => {
+            failure.push_frames(&crate::server::command_frames::command_frames(server.command_origin));
+            Some(failure.print_stack_trace().trim_end().to_string())
+        }
+        (Ok(()), Ok(())) => None,
+    };
+    if let Some(failure) = failure {
+        let absolute = if datapack_dir.is_absolute() { datapack_dir } else { std::env::current_dir().map_or_else(|_| datapack_dir.clone(), |dir| dir.join(&datapack_dir)) };
+        warn!("Failed to create pack at {}\n{failure}", absolute.display());
         return Err(ERROR_PACK_IO_FAILURE.create(id));
     }
     source.send_success(server, || tr("commands.datapack.create.success", vec![Arg::String(id.clone())]), true);
     Ok(1)
 }
 
+const JSON_WRITER_CLOSE_FRAMES: [&str; 3] = [
+    "com.google.gson.stream.JsonWriter.close(JsonWriter.java:720)",
+    "net.minecraft.server.commands.DataPackCommand.createPack(DataPackCommand.java:191)",
+    "net.minecraft.server.commands.DataPackCommand.lambda$register$13(DataPackCommand.java:147)",
+];
+const JSON_WRITER_WRITE_FRAMES: [&str; 2] = [
+    "net.minecraft.server.commands.DataPackCommand.createPack(DataPackCommand.java:201)",
+    "net.minecraft.server.commands.DataPackCommand.lambda$register$13(DataPackCommand.java:147)",
+];
 const ENABLE_PACK_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.enablePack(DataPackCommand.java:208)";
 const DISABLE_PACK_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.disablePack(DataPackCommand.java:219)";
 const ENABLE_DEFAULT_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$0(DataPackCommand.java:93)";

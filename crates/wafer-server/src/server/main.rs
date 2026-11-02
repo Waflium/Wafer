@@ -205,7 +205,9 @@ fn start(args: Vec<String>) {
         .expect("network runtime");
     let services = {
         let _context = runtime.enter();
-        super::services::Services::create()
+        let services = super::services::Services::create();
+        super::players::cached_user_name_to_id_resolver::CachedUserNameToIdResolver::preload(universe.clone());
+        services
     };
     let properties = settings.properties();
     let (management_server, management_runtime) = match super::jsonrpc::create(properties) {
