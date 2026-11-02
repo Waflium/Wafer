@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::bail;
+use wafer_data::packets::play::serverbound::{CHAT, CHAT_ACK, CHAT_COMMAND, CHAT_COMMAND_SIGNED};
 use wafer_data::packets::{handshake, login, status};
 use wafer_data::{PROTOCOL_VERSION, VERSION_NAME};
 use tokio::net::{TcpListener, TcpStream};
@@ -58,6 +59,7 @@ pub struct ListenerContext {
     pub status: Arc<RwLock<Option<Arc<str>>>>,
     pub player_names_array: Arc<RwLock<Arc<[String]>>>,
     pub events: mpsc::UnboundedSender<Event>,
+    pub tasks: crate::server::ServerTaskSender,
     pub settings: Arc<ListenerSettings>,
     pub server_activity_monitor: Arc<ServerActivityMonitor>,
 }
@@ -188,11 +190,17 @@ async fn login_phase(mut r: PacketReader, mut w: PacketWriter, context: &Listene
     };
     let conn = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
     let packets = events.clone();
-    let out = connection::spawn_io(r, w, io_thread, move |packet| {
-        let _ = packets.send(match packet {
-            Ok(packet) => Event::Packet { conn, packet },
-            Err(reason) => Event::Left { conn, reason },
-        });
+    let tasks = context.tasks.clone();
+    let out = connection::spawn_io(r, w, io_thread, move |packet| match packet {
+        Ok(packet) if matches!(packet.id, CHAT | CHAT_COMMAND | CHAT_COMMAND_SIGNED | CHAT_ACK) => {
+            let _ = tasks.send_network_thread_event(Event::Packet { conn, packet });
+        }
+        Ok(packet) => {
+            let _ = packets.send(Event::Packet { conn, packet });
+        }
+        Err(reason) => {
+            let _ = packets.send(Event::Left { conn, reason });
+        }
     });
     events.send(Event::Join { conn, profile, cookie, out, address })?;
     Ok(())

@@ -23,7 +23,7 @@ impl TimerCallback {
                 }
             }
             TimerCallback::FunctionTag(tag_id) => {
-                for function in server.functions.get_tag(tag_id).to_vec() {
+                for function in server.functions.get_tag(tag_id) {
                     let sender = ServerFunctionManager::game_loop_sender(server);
                     server.run_from(CommandOrigin::ScheduledFunctionTag, |server| ServerFunctionManager::execute(server, &function, &sender));
                 }

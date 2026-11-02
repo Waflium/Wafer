@@ -2,7 +2,11 @@ use std::cell::Cell;
 use std::marker::PhantomData;
 
 use super::ServerLevel;
+use crate::commands::functions::CommandFunction;
+use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
+use crate::server::command_origin::CommandOrigin;
+use crate::server::server_function_manager::ServerFunctionManager;
 
 thread_local! {
     static LENDER: Cell<(*mut Server, usize)> = const { Cell::new((std::ptr::null_mut(), 0)) };
@@ -92,6 +96,14 @@ impl ServerLevel {
         let result = run(unsafe { &mut *server });
         drop(returned);
         Some(result)
+    }
+
+    pub fn execute_function(&mut self, function: std::sync::Arc<CommandFunction>, sender: CommandSourceStack, origin: CommandOrigin) {
+        if self.with_server(|server| server.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &sender))).is_none()
+            && !ServerFunctionManager::execute_in_current_context(&function, &sender)
+        {
+            self.pending_function_executions.push((function, sender, origin));
+        }
     }
 }
 

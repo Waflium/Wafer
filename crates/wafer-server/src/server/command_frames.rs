@@ -173,7 +173,9 @@ fn origin_base() -> Vec<&'static str> {
 pub fn enter_command(origin: CommandOrigin) -> super::main_thread_frames::FrameScope {
     static CACHED: [std::sync::OnceLock<&'static [&'static str]>; 13] = [const { std::sync::OnceLock::new() }; 13];
     match origin {
-        CommandOrigin::EnchantmentEffect | CommandOrigin::TestEnvironmentFunction | CommandOrigin::AdvancementReward => super::main_thread_frames::enter_complete(command_frames(origin)),
+        CommandOrigin::EnchantmentEffect | CommandOrigin::TestEnvironmentFunction | CommandOrigin::AdvancementReward | CommandOrigin::PlayerChat | CommandOrigin::Rcon => {
+            super::main_thread_frames::enter_complete(command_frames(origin))
+        }
         _ => super::main_thread_frames::enter_absolute_static(CACHED[origin as usize].get_or_init(|| command_frames(origin).leak())),
     }
 }
@@ -196,16 +198,16 @@ pub fn origin_frames(origin: CommandOrigin) -> Vec<&'static str> {
             frames.push(PERFORM_COMMAND[0]);
             frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.performUnsignedChatCommand(ServerGamePacketListenerImpl.java:1717)");
             frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.lambda$handleChatCommand$0(ServerGamePacketListenerImpl.java:1705)");
-            frames.extend(TASK_QUEUE);
-            frames.extend(SPIN);
+            frames.extend(&TASK_QUEUE[..8]);
+            frames.extend(origin_base());
         }
         CommandOrigin::Rcon => {
             frames.extend(PERFORM_COMMAND);
             frames.push("net.minecraft.server.dedicated.DedicatedServer.lambda$runCommand$0(DedicatedServer.java:698)");
             frames.push("net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:75)");
             frames.push("java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)");
-            frames.extend(TASK_QUEUE);
-            frames.extend(SPIN);
+            frames.extend(&TASK_QUEUE[..8]);
+            frames.extend(origin_base());
         }
         CommandOrigin::CommandBlock | CommandOrigin::ChainCommandBlock => {
             frames.extend(PERFORM_COMMAND);

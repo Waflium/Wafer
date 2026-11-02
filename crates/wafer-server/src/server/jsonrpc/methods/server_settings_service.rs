@@ -135,7 +135,13 @@ pub fn force_game_mode(server: &mut Server, _client: ClientInfo) -> Value {
 pub fn set_force_game_mode(server: &mut Server, params: &Value, client: ClientInfo) -> Result<Value, String> {
     let force = decode_bool(params)?;
     log(client, format_args!("Update force game mode from {} to {force}", server.config.force_game_mode));
-    server.set_force_game_mode(force);
+    crate::server::main_thread_frames::within(
+        &[
+            "net.minecraft.server.jsonrpc.internalapi.MinecraftServerSettingsServiceImpl.setForceGameMode(MinecraftServerSettingsServiceImpl.java:157)",
+            "net.minecraft.server.jsonrpc.methods.ServerSettingsService.setForceGameMode(ServerSettingsService.java:96)",
+        ],
+        || server.set_force_game_mode(force),
+    );
     Ok(Value::Bool(server.config.force_game_mode))
 }
 
@@ -146,7 +152,13 @@ pub fn game_mode(server: &mut Server, _client: ClientInfo) -> Value {
 pub fn set_game_mode(server: &mut Server, params: &Value, client: ClientInfo) -> Result<Value, String> {
     let mode = decode_params(params, |v| codec::enum_by_name(v, GameType::by_name))?;
     log(client, format_args!("Update game mode from '{}' to '{}'", server.config.game_mode.name().to_uppercase(), mode.name().to_uppercase()));
-    server.set_game_mode(mode);
+    crate::server::main_thread_frames::within(
+        &[
+            "net.minecraft.server.jsonrpc.internalapi.MinecraftServerSettingsServiceImpl.setGameMode(MinecraftServerSettingsServiceImpl.java:169)",
+            "net.minecraft.server.jsonrpc.methods.ServerSettingsService.setGameMode(ServerSettingsService.java:104)",
+        ],
+        || server.set_game_mode(mode),
+    );
     Ok(Value::String(server.config.game_mode.name().into()))
 }
 

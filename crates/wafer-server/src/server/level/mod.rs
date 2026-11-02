@@ -222,8 +222,8 @@ pub struct ServerLevel {
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
     pub defer_full_status_changes: bool,
-    pub pending_function_executions: Vec<(String, EntityId)>,
-    pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32))>,
+    pub functions: Rc<RefCell<crate::server::server_function_library::ServerFunctionLibrary>>,
+    pub pending_function_executions: Vec<(std::sync::Arc<crate::commands::functions::CommandFunction>, crate::commands::source::CommandSourceStack, crate::server::command_origin::CommandOrigin)>,
     pub lent: bool,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
@@ -375,8 +375,8 @@ impl ServerLevel {
             pending_system_broadcasts: Vec::new(),
             pending_broadcasts: Vec::new(),
             defer_full_status_changes: false,
+            functions: Rc::default(),
             pending_function_executions: Vec::new(),
-            pending_enchantment_functions: Vec::new(),
             lent: false,
             entity_tick_range: None,
             environment_attributes: EnvironmentAttributeSystem::default(),
@@ -1818,7 +1818,7 @@ impl ServerLevel {
     }
 
     fn has_pending_server_work(&self) -> bool {
-        self.pending_server_work.is_some() || !self.pending_enchantment_functions.is_empty() || !self.pending_function_executions.is_empty()
+        self.pending_server_work.is_some() || !self.pending_function_executions.is_empty()
     }
 
     pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {

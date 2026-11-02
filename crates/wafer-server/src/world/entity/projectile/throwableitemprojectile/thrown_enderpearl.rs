@@ -254,7 +254,12 @@ impl ServerLevel {
         if state.is_block(blocks::END_GATEWAY)
             && let Some(player) = self.projectile_get_owner(id).filter(|&owner| self.is_player(owner))
         {
-            crate::advancements::triggers::criteria_triggers::ENTER_BLOCK.trigger(self.level_holding_mut(player), player, state);
+            let trigger = crate::advancements::triggers::criteria_triggers::ENTER_BLOCK;
+            if self.is_in_level(player) {
+                trigger.trigger(self, player, state);
+            } else if self.with_server(|server| trigger.trigger(&mut server.lend_entity_level(player), player, state)).is_none() {
+                trigger.trigger(self.level_holding_mut(player), player, state);
+            }
         }
     }
 

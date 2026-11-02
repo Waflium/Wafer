@@ -14,6 +14,19 @@ use super::outgoing_rpc_methods::{self, OutgoingRpcMethod};
 use super::security::authentication_handler::AuthenticationHandler;
 use crate::server::level::chunk_workers::WorkResult;
 use crate::server::{Server, ServerTaskSender};
+use crate::util::java_throwable::JavaThrowable;
+
+const SUBMIT_FRAMES: [&str; 9] = [
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+    "net.minecraft.server.TickTask.run(TickTask.java:18)",
+    "net.minecraft.util.thread.BlockableEventLoop.doRunTask(BlockableEventLoop.java:173)",
+    "net.minecraft.util.thread.ReentrantBlockableEventLoop.doRunTask(ReentrantBlockableEventLoop.java:23)",
+    "net.minecraft.server.MinecraftServer.doRunTask(MinecraftServer.java:912)",
+    "net.minecraft.server.MinecraftServer.doRunTask(MinecraftServer.java:193)",
+    "net.minecraft.util.thread.BlockableEventLoop.pollTask(BlockableEventLoop.java:147)",
+    "net.minecraft.server.MinecraftServer.pollTaskInternal(MinecraftServer.java:894)",
+    "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
+];
 
 pub struct ManagementServer {
     host: String,
@@ -142,12 +155,17 @@ impl ManagementServer {
         self.ready.store(true, Ordering::Release);
     }
 
-    pub fn submit<R: Send + 'static>(&self, task: impl FnOnce(&mut Server) -> R + Send + Sync + 'static) -> Option<oneshot::Receiver<R>> {
+    pub fn submit<R: Send + 'static>(&self, task: impl FnOnce(&mut Server) -> R + Send + Sync + 'static) -> Option<oneshot::Receiver<Result<R, JavaThrowable>>> {
         let tasks = self.tasks.get()?;
         let (reply, receiver) = oneshot::channel();
         tasks
             .send(Box::new(move |server| {
-                let _ = reply.send(task(server));
+                let _frames = crate::server::main_thread_frames::enter_static(&SUBMIT_FRAMES);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| task(server))).map_err(|payload| match payload.downcast_ref::<crate::crash_report::ReportedException>() {
+                    Some(reported) => reported.0.reported_exception(),
+                    None => crate::crash_report::throwable_of(&payload),
+                });
+                let _ = reply.send(result);
             }))
             .ok()?;
         if let Some(waker) = self.waker.get() {

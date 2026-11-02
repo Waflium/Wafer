@@ -226,16 +226,27 @@ pub type ServerTask = Box<dyn FnOnce(&mut Server) + Send + Sync>;
 #[derive(Clone)]
 pub struct ServerTaskSender {
     sender: std::sync::mpsc::Sender<ServerTask>,
+    network_thread_events: std::sync::mpsc::Sender<Event>,
     wakeup: Arc<std::sync::OnceLock<Arc<level::chunk_workers::MainThreadWakeup>>>,
 }
 
 impl ServerTaskSender {
     pub fn send(&self, task: ServerTask) -> Result<(), std::sync::mpsc::SendError<ServerTask>> {
         self.sender.send(task)?;
+        self.wake();
+        Ok(())
+    }
+
+    pub fn send_network_thread_event(&self, event: Event) -> Result<(), std::sync::mpsc::SendError<Event>> {
+        self.network_thread_events.send(event)?;
+        self.wake();
+        Ok(())
+    }
+
+    fn wake(&self) {
         if let Some(wakeup) = self.wakeup.get() {
             wakeup.wake();
         }
-        Ok(())
     }
 }
 
@@ -320,6 +331,7 @@ pub struct Server {
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
     tasks: ServerTasks,
     remote_tasks: Option<std::sync::mpsc::Receiver<ServerTask>>,
+    network_thread_events: Option<std::sync::mpsc::Receiver<Event>>,
     next_tick_time: Instant,
     may_have_delayed_tasks: bool,
     delayed_tasks_max_next_tick_time: Instant,
@@ -599,6 +611,7 @@ impl Server {
             prepare_spawn_tasks: Vec::new(),
             tasks,
             remote_tasks: None,
+            network_thread_events: None,
             next_tick_time: Instant::now(),
             may_have_delayed_tasks: false,
             delayed_tasks_max_next_tick_time: Instant::now(),
@@ -660,6 +673,9 @@ impl Server {
             on_metrics_recording_finished: None,
             will_start_recording_metrics: false,
         };
+        for level in &mut server.levels {
+            level.functions = server.functions.library();
+        }
         server.name_to_id_cache.set_resolve_offline_users(!server.config.online_mode);
         server.attach_user_lookup();
         server.set_difficulty(server.config.difficulty, true);
@@ -879,9 +895,16 @@ impl Server {
         }
     }
 
+    fn handle_network_thread_events(&mut self) {
+        while let Some(event) = self.network_thread_events.as_ref().and_then(|events| events.try_recv().ok()) {
+            self.handle(event);
+        }
+    }
+
     fn poll_server_task(&mut self) -> bool {
         crate::crash_report::throw_delayed_exception();
         self.execute_remote_tasks();
+        self.handle_network_thread_events();
         for index in 0..self.levels.len() {
             self.register_entity_deserializer(index);
         }
@@ -1027,7 +1050,7 @@ impl Server {
         let Some(game_type) = game_type else { return 0 };
         let ids = self.player_ids();
         let _scope = main_thread_frames::enter_static(&["net.minecraft.server.MinecraftServer.enforceGameTypeForPlayers(MinecraftServer.java:1405)"]);
-        ids.into_iter().filter(|&id| self.entity_level_mut(id).set_game_mode(id, game_type)).count() as i32
+        ids.into_iter().filter(|&id| self.lend_entity_level(id).set_game_mode(id, game_type)).count() as i32
     }
 
     fn calculate_game_mode_for_new_player(&self, loaded: Option<GameType>) -> GameType {
@@ -2160,39 +2183,10 @@ impl Server {
     pub fn run_level_tasks(&mut self) {
         self.deliver_level_broadcasts();
         for index in 0..self.levels.len() {
-            for (function, player) in std::mem::take(&mut self.levels[index].pending_function_executions) {
-                self.execute_reward_function(&function, player);
-            }
-            for (name, entity, position, rotation) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
-                self.execute_enchantment_function(index, &name, entity, position, rotation);
+            for (function, source, origin) in std::mem::take(&mut self.levels[index].pending_function_executions) {
+                self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
             }
         }
-    }
-
-    pub fn execute_reward_function(&mut self, function: &str, player: EntityId) {
-        if let Some((function, source)) = self.reward_function_call(function, player) {
-            self.run_from(CommandOrigin::AdvancementReward, |server| ServerFunctionManager::execute(server, &function, &source));
-        }
-    }
-
-    pub fn reward_function_call(&self, function: &str, player: EntityId) -> Option<(Arc<crate::commands::functions::CommandFunction>, CommandSourceStack)> {
-        self.level_of(player)?;
-        let function = self.functions.get(function)?;
-        Some((function, CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2)))
-    }
-
-    pub fn execute_enchantment_function(&mut self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32)) {
-        if let Some((function, source)) = self.enchantment_function_call(index, name, entity, position, rotation) {
-            self.run_from(CommandOrigin::EnchantmentEffect, |server| ServerFunctionManager::execute(server, &function, &source));
-        }
-    }
-
-    pub fn enchantment_function_call(&self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32)) -> Option<(Arc<crate::commands::functions::CommandFunction>, CommandSourceStack)> {
-        let Some(function) = self.functions.get(name) else {
-            error!("Enchantment run_function effect failed for non-existent function {name}");
-            return None;
-        };
-        Some((function, CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation)))
     }
 
     pub fn send_global_level_events(&mut self) {
@@ -2403,7 +2397,8 @@ pub fn run(
 ) -> anyhow::Result<()> {
     main_thread_frames::publish_current_thread();
     let (sender_half, tasks) = std::sync::mpsc::channel::<ServerTask>();
-    let task_sender = ServerTaskSender { sender: sender_half, wakeup: Arc::default() };
+    let (network_thread_sender, network_thread_events) = std::sync::mpsc::channel::<Event>();
+    let task_sender = ServerTaskSender { sender: sender_half, network_thread_events: network_thread_sender, wakeup: Arc::default() };
     if let Some(management_server) = &management_server {
         management_server.set_server(task_sender.clone());
     }
@@ -2488,6 +2483,7 @@ pub fn run(
         status: status.clone(),
         player_names_array: player_names_array.clone(),
         events: sender.clone(),
+        tasks: task_sender.clone(),
         settings: listener_settings.clone(),
         server_activity_monitor: server_activity_monitor.clone(),
     });
@@ -2543,7 +2539,7 @@ pub fn run(
     info!("Done ({}s)! For help, type \"help\"", crate::util::java_format_fixed(started.elapsed().as_nanos() as f64 / 1.0e9, 3));
     server.services = services;
     server.attach_user_lookup();
-    server.task_sender = Some(task_sender);
+    server.task_sender = Some(task_sender.clone());
     server.status = status;
     server.player_names_array = player_names_array;
     let mut query_thread_gs4 = None;
@@ -2563,7 +2559,7 @@ pub fn run(
         }
         if properties.enable_rcon {
             info!("Starting remote control listener");
-            rcon_thread = rcon::rcon_thread::RconThread::create(&properties.server_ip, properties.rcon_port, &properties.rcon_password, sender.clone(), &runtime);
+            rcon_thread = rcon::rcon_thread::RconThread::create(&properties.server_ip, properties.rcon_port, &properties.rcon_password, task_sender, &runtime);
         }
     }
     let timing = dedicated::server_watchdog::ServerTiming::new();
@@ -2586,6 +2582,7 @@ pub fn run(
         server.build_server_status();
     }
     server.remote_tasks = Some(tasks);
+    server.network_thread_events = Some(network_thread_events);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &timing)));
     let crashed = result.is_err();
     if let Err(panic) = result {

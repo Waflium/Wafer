@@ -159,11 +159,15 @@ impl CommandSourceStack {
     }
 
     pub fn server(server: &Server) -> CommandSourceStack {
+        CommandSourceStack::for_server(server.find_respawn_dimension(), Vec3::at_lower_corner_of(server.respawn_data().pos))
+    }
+
+    pub fn for_server(level: usize, position: Vec3) -> CommandSourceStack {
         CommandSourceStack {
             source: CommandSource::Server,
-            position: Vec3::at_lower_corner_of(server.respawn_data().pos),
+            position,
             rotation: (0.0, 0.0),
-            level: server.find_respawn_dimension(),
+            level,
             permission: 4,
             names: Names::Constant(Component::literal("Server")),
             entity: None,
@@ -180,29 +184,20 @@ impl CommandSourceStack {
 
     pub fn player(server: &Server, id: EntityId) -> CommandSourceStack {
         let level = server.level_of(id).expect("player on this server");
-        let player = server.levels[level].player(id);
-        CommandSourceStack {
-            source: CommandSource::Player(id),
-            position: player.entity.position(),
-            rotation: (player.entity.x_rot, player.entity.y_rot),
-            level,
-            permission: server.profile_permission_level(player.profile.uuid),
-            names: Names::ForEntity,
-            entity: Some(id),
-            silent: false,
-            anchor: Anchor::Feet,
-            callback: CommandResultCallback::default(),
-            signing_context: None,
-        }
+        CommandSourceStack::for_new_player(server, level, server.levels[level].player(id))
     }
 
     pub fn for_new_player(server: &Server, level: usize, player: &crate::server::level::server_player::ServerPlayer) -> CommandSourceStack {
+        CommandSourceStack::for_player(level, player, server.profile_permission_level(player.profile.uuid))
+    }
+
+    pub fn for_player(level: usize, player: &crate::server::level::server_player::ServerPlayer, permission: i32) -> CommandSourceStack {
         CommandSourceStack {
             source: CommandSource::Player(player.entity.id),
             position: player.entity.position(),
             rotation: (player.entity.x_rot, player.entity.y_rot),
             level,
-            permission: server.profile_permission_level(player.profile.uuid),
+            permission,
             names: Names::ForEntity,
             entity: Some(player.entity.id),
             silent: false,

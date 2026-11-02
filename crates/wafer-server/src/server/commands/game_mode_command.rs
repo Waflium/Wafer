@@ -36,7 +36,7 @@ pub fn set_game_mode(server: &mut Server, player: EntityId, game_type: GameType)
 }
 
 fn set_game_mode_as(server: &mut Server, source: &CommandSourceStack, player: EntityId, game_type: GameType) -> bool {
-    if !server.entity_level_mut(player).set_game_mode(player, game_type) {
+    if !server.lend_entity_level(player).set_game_mode(player, game_type) {
         return false;
     }
     log_gamemode_change(server, source, player, game_type);

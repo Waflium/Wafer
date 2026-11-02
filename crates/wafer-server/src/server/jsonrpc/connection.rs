@@ -24,6 +24,7 @@ use super::security::authentication_handler::SecurityCheckResult;
 use crate::network::server_connection_listener::loggable_address;
 
 const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const DISPATCH_INCOMING_REQUEST_LAMBDA: &str = "net.minecraft.server.jsonrpc.Connection.lambda$dispatchIncomingRequest$0(Connection.java:256)";
 const HIXIE_MAX_FRAME_SIZE: usize = 16384;
 const TAIL_EXCEPTION: &str =
     "An exceptionCaught() event was fired, and it reached at the tail of the pipeline. It usually means the last handler in the pipeline did not handle the exception.";
@@ -495,12 +496,16 @@ impl Connection {
 
     async fn handle_incoming_request(&self, id: Option<&Value>, method: &str, params: Option<&Value>) -> Option<Value> {
         let result = self.dispatch_incoming_request(method, params).await?;
+        if let Err(RpcFailure::Exception(exception)) = &result {
+            error!(thread: &self.thread, "Error while dispatching rpc method {method}\n{}", exception.print_stack_trace().trim_end());
+        }
         let id = id?.clone();
         Some(match result {
             Ok(result) => json_rpc_utils::create_success_result(id, result),
             Err(RpcFailure::InvalidParams(message)) => JsonRpcErrors::InvalidParams.create(id, &message),
             Err(RpcFailure::InvalidRequest(message)) => JsonRpcErrors::InvalidRequest.create(id, &message),
             Err(RpcFailure::MethodNotFound(message)) => JsonRpcErrors::MethodNotFound.create(id, &message),
+            Err(RpcFailure::Exception(_)) => JsonRpcErrors::InternalError.create_without_data(id),
         })
     }
 
@@ -519,8 +524,8 @@ impl Connection {
         }
         let params = params.cloned();
         let client = self.client;
-        let reply = self.server.submit(move |server| incoming.apply(Some(server), params.as_ref(), client))?;
-        reply.await.ok()
+        let reply = self.server.submit(move |server| crate::server::main_thread_frames::within(&[DISPATCH_INCOMING_REQUEST_LAMBDA], || incoming.apply(Some(server), params.as_ref(), client)))?;
+        Some(reply.await.ok()?.unwrap_or_else(|exception| Err(RpcFailure::Exception(exception))))
     }
 }
 

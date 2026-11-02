@@ -1,11 +1,12 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use super::Server;
 use super::command_origin::CommandOrigin;
 use super::server_function_library::ServerFunctionLibrary;
 use crate::commands::execute_command_in_context;
-use crate::commands::execution::tasks::CallFunction;
-use crate::commands::execution::{CommandQueueEntry, EntryAction, ExecutionContext, Frame};
+use crate::commands::execution::ExecutionContext;
 use crate::commands::functions::CommandFunction;
 use crate::commands::source::{CommandResultCallback, CommandSourceStack};
 use crate::util::profiling::profiler;
@@ -16,12 +17,12 @@ const LOAD_FUNCTION_TAG: &str = "minecraft:load";
 pub struct ServerFunctionManager {
     ticking: Vec<Arc<CommandFunction>>,
     post_reload: bool,
-    library: ServerFunctionLibrary,
+    library: Rc<RefCell<ServerFunctionLibrary>>,
 }
 
 impl ServerFunctionManager {
     pub fn new(library: ServerFunctionLibrary) -> ServerFunctionManager {
-        let mut manager = ServerFunctionManager { ticking: Vec::new(), post_reload: false, library };
+        let mut manager = ServerFunctionManager { ticking: Vec::new(), post_reload: false, library: Rc::new(RefCell::new(library)) };
         manager.post_reload();
         manager
     }
@@ -32,7 +33,7 @@ impl ServerFunctionManager {
         }
         if server.functions.post_reload {
             server.functions.post_reload = false;
-            let functions = server.functions.library.get_tag(LOAD_FUNCTION_TAG).to_vec();
+            let functions = server.functions.get_tag(LOAD_FUNCTION_TAG);
             server.run_from(CommandOrigin::LoadFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &functions, LOAD_FUNCTION_TAG));
         }
         let ticking = server.functions.ticking.clone();
@@ -54,30 +55,24 @@ impl ServerFunctionManager {
         }
     }
 
-    pub fn queue_in_current_context(resolve: impl FnOnce(&mut Server) -> Option<(Arc<CommandFunction>, CommandSourceStack)> + 'static) -> bool {
+    pub fn execute_in_current_context(function: &CommandFunction, sender: &CommandSourceStack) -> bool {
         if !ExecutionContext::is_running() {
             return false;
         }
-        ExecutionContext::with(|context| {
-            let frame = context.create_top_frame(CommandResultCallback::EMPTY);
-            let call = move |server: &mut Server, frame: &Frame| {
-                let Some((function, sender)) = resolve(server) else { return };
-                if let Ok(function) = function.instantiate(None) {
-                    CallFunction { function, result_callback: sender.callback.clone(), return_parent_frame: false }.execute(sender, frame);
-                }
-            };
-            context.queue_next(CommandQueueEntry::new(frame, EntryAction::Custom(Box::new(call))));
-        });
+        let _zone = profiler::zone_with(|| format!("function {}", function.id()));
+        if let Ok(function) = function.instantiate(None) {
+            ExecutionContext::with(|context| context.queue_initial_function_call(function, sender, CommandResultCallback::EMPTY));
+        }
         true
     }
 
     pub fn replace_library(&mut self, library: ServerFunctionLibrary) {
-        self.library = library;
+        *self.library.borrow_mut() = library;
         self.post_reload();
     }
 
     fn post_reload(&mut self) {
-        self.ticking = self.library.get_tag(TICK_FUNCTION_TAG).to_vec();
+        self.ticking = self.library.borrow().get_tag(TICK_FUNCTION_TAG).to_vec();
         self.post_reload = true;
     }
 
@@ -85,19 +80,23 @@ impl ServerFunctionManager {
         CommandSourceStack::server(server).with_permission(2).with_suppressed_output()
     }
 
+    pub fn library(&self) -> Rc<RefCell<ServerFunctionLibrary>> {
+        self.library.clone()
+    }
+
     pub fn get(&self, id: &str) -> Option<Arc<CommandFunction>> {
-        self.library.get(id)
+        self.library.borrow().get(id)
     }
 
-    pub fn get_tag(&self, id: &str) -> &[Arc<CommandFunction>] {
-        self.library.get_tag(id)
+    pub fn get_tag(&self, id: &str) -> Vec<Arc<CommandFunction>> {
+        self.library.borrow().get_tag(id).to_vec()
     }
 
-    pub fn function_names(&self) -> impl Iterator<Item = &str> {
-        self.library.function_names()
+    pub fn function_names(&self) -> Vec<String> {
+        self.library.borrow().function_names().map(str::to_string).collect()
     }
 
-    pub fn tag_names(&self) -> impl Iterator<Item = &str> {
-        self.library.available_tags()
+    pub fn tag_names(&self) -> Vec<String> {
+        self.library.borrow().available_tags().map(str::to_string).collect()
     }
 }

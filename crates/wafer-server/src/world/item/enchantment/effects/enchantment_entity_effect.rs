@@ -623,15 +623,15 @@ impl EnchantmentEntityEffect {
                 }
             }
             EnchantmentEntityEffect::RunFunction(function) => {
-                let e = level.entity(entity);
-                let rotation = (e.x_rot, e.y_rot);
-                let index = level.index;
-                if level.with_server(|server| server.execute_enchantment_function(index, function, entity, position, rotation)).is_none() {
-                    let queued = function.clone();
-                    let call = move |server: &mut crate::server::Server| server.enchantment_function_call(index, &queued, entity, position, rotation);
-                    if !crate::server::server_function_manager::ServerFunctionManager::queue_in_current_context(call) {
-                        level.pending_enchantment_functions.push((function.clone(), entity, position, rotation));
+                let found = level.functions.borrow().get(function);
+                match found {
+                    Some(found) => {
+                        let e = level.entity(entity);
+                        let rotation = (e.x_rot, e.y_rot);
+                        let source = crate::commands::source::CommandSourceStack::for_server(level.index, position).with_permission(2).with_suppressed_output().with_entity(entity).with_rotation(rotation);
+                        level.execute_function(found, source, crate::server::command_origin::CommandOrigin::EnchantmentEffect);
                     }
+                    None => error!("Enchantment run_function effect failed for non-existent function {function}"),
                 }
             }
             EnchantmentEntityEffect::SetBlockProperties { properties, offset, trigger_game_event } => {

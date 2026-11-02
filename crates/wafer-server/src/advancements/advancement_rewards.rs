@@ -2,9 +2,10 @@ use wafer_core::random::RandomSource;
 use wafer_data::registry;
 use wafer_protocol::nbt::Nbt;
 
+use crate::commands::source::CommandSourceStack;
 use crate::core::holder::Holder;
+use crate::server::command_origin::CommandOrigin;
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::server::server_function_manager::ServerFunctionManager;
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
@@ -74,13 +75,11 @@ impl AdvancementRewards {
             let recipes: Vec<&'static RecipeHolder> = self.recipes.iter().filter_map(|id| recipe_manager.by_key(id)).collect();
             level.award_recipes(player, &recipes);
         }
-        if let Some(function) = &self.function
-            && level.with_server(|server| server.execute_reward_function(function, player)).is_none()
+        if let Some(function) = self.function.as_ref().and_then(|function| level.functions.borrow().get(function))
+            && let Some(p) = level.find_player(player)
         {
-            let queued = function.clone();
-            if !ServerFunctionManager::queue_in_current_context(move |server| server.reward_function_call(&queued, player)) {
-                level.pending_function_executions.push((function.clone(), player));
-            }
+            let sender = CommandSourceStack::for_player(level.level_holding(player).index, p, level.profile_permission_level(p.profile.uuid)).with_suppressed_output().with_permission(2);
+            level.execute_function(function, sender, CommandOrigin::AdvancementReward);
         }
     }
 }

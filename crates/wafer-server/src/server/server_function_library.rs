@@ -13,8 +13,6 @@ const FUNCTION_DIRECTORY: &str = "function";
 const FUNCTION_EXTENSION: &str = ".mcfunction";
 const TAG_DIRECTORY: &str = "tags/function";
 
-static NEXT_WORKER: AtomicUsize = AtomicUsize::new(2);
-
 pub struct ServerFunctionLibrary {
     functions: JavaHashMap<Arc<CommandFunction>>,
     tags: JavaHashMap<Vec<Arc<CommandFunction>>>,
@@ -27,7 +25,7 @@ impl Default for ServerFunctionLibrary {
 }
 
 pub(crate) fn worker_name() -> String {
-    format!("Worker-Main-{}", NEXT_WORKER.fetch_add(1, Ordering::Relaxed))
+    crate::server::level::chunk_workers::random_worker_name().to_string()
 }
 
 fn read_lines(bytes: &[u8]) -> Vec<String> {

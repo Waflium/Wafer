@@ -33,7 +33,7 @@ fn get_function(server: &Server, id: &str) -> Result<Arc<CommandFunction>, Comma
 }
 
 fn get_function_tag(server: &Server, id: &str) -> Vec<Arc<CommandFunction>> {
-    server.functions.get_tag(id).to_vec()
+    server.functions.get_tag(id)
 }
 
 pub fn get_functions(server: &Server, context: &CommandContext, name: &str) -> Result<Vec<Arc<CommandFunction>>, CommandSyntaxException> {

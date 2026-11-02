@@ -243,7 +243,7 @@ impl Server {
             player.food_data = old.food_data;
             self.levels[level_index].players.insert(id, player);
             for effect in &old.living.active_effects {
-                self.levels[level_index].add_effect(id, effect.clone(), None);
+                self.lend_level(level_index).add_effect(id, effect.clone(), None);
             }
             player = self.levels[level_index].players.shift_remove(&id).expect("restored player");
             transfer_inventory_xp_and_score(&mut player, &old.inventory, &old.experience, old_score);

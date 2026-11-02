@@ -13,6 +13,7 @@ pub enum RpcFailure {
     InvalidParams(String),
     InvalidRequest(String),
     MethodNotFound(String),
+    Exception(crate::util::java_throwable::JavaThrowable),
 }
 
 pub type ParameterlessFunction = fn(&mut Server, ClientInfo) -> Value;
@@ -42,7 +43,9 @@ impl IncomingRpcMethod {
                 Err(RpcFailure::InvalidParams("Expected no params, or an empty array".into()))
             }
             Function::Discover => Ok(discovery_service::discover()),
-            Function::Parameterless(function) => Ok(function(server.unwrap(), client)),
+            Function::Parameterless(function) => {
+                Ok(crate::server::main_thread_frames::within(&["net.minecraft.server.jsonrpc.IncomingRpcMethod$ParameterlessMethod.apply(IncomingRpcMethod.java:59)"], || function(server.unwrap(), client)))
+            }
             Function::Parameter(function) => {
                 let element = match params {
                     Some(Value::Object(object)) => {
@@ -55,7 +58,8 @@ impl IncomingRpcMethod {
                     Some(Value::Array(_)) => return Err(RpcFailure::InvalidParams("Expected exactly one element in the params array".into())),
                     _ => return Err(RpcFailure::InvalidParams("Expected params as array or named".into())),
                 };
-                function(server.unwrap(), element, client).map_err(RpcFailure::InvalidParams)
+                crate::server::main_thread_frames::within(&["net.minecraft.server.jsonrpc.IncomingRpcMethod$Method.apply(IncomingRpcMethod.java:99)"], || function(server.unwrap(), element, client))
+                    .map_err(RpcFailure::InvalidParams)
             }
         }
     }
