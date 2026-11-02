@@ -95,7 +95,9 @@ impl ServerLevel {
         let loot_table_seed = container.loot_table_seed;
         let loot_table = LootTable::get(&loot_table_key);
         if let Some(player) = player.filter(|&player| self.is_player(player)) {
-            crate::advancements::triggers::criteria_triggers::GENERATE_LOOT.trigger(self, player, &loot_table_key);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.ContainerEntity.unpackChestVehicleLootTable(ContainerEntity.java:107)"], || {
+                crate::advancements::triggers::criteria_triggers::GENERATE_LOOT.trigger(self, player, &loot_table_key)
+            });
         }
         let origin = self.entity(id).position();
         let luck = player.map(|player| self.attribute_value(player, Attribute::Luck) as f32);
@@ -118,7 +120,9 @@ impl ServerLevel {
     }
 
     pub fn interact_with_container_vehicle(&mut self, id: EntityId, player: EntityId) -> InteractionResult {
-        self.open_menu(player, crate::world::inventory::menu_provider::MenuProvider::ChestVehicle(id));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.ContainerEntity.interactWithContainerVehicle(ContainerEntity.java:98)"], || {
+            self.open_menu(player, crate::world::inventory::menu_provider::MenuProvider::ChestVehicle(id))
+        });
         InteractionResult::SUCCESS
     }
 

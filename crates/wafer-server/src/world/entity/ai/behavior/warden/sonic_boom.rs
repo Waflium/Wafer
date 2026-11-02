@@ -3,7 +3,7 @@ use wafer_data::damage_types;
 
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
-use crate::world::entity::ai::behavior::behavior::{Behavior, BehaviorState};
+use crate::world::entity::ai::behavior::behavior::{Behavior, BehaviorState, TICK_OR_STOP};
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::memory_status::MemoryStatus;
 use crate::world::entity::attributes::Attribute;
@@ -18,6 +18,11 @@ const KNOCKBACK_HORIZONTAL: f64 = 2.5;
 pub const COOLDOWN: i32 = 40;
 const TICKS_BEFORE_PLAYING_SOUND: i32 = 34;
 const DURATION: i32 = 60;
+const HURT_TARGET_FRAMES: [&str; 3] = [
+    "net.minecraft.world.entity.ai.behavior.warden.SonicBoom.lambda$tick$2(SonicBoom.java:89)",
+    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+    "net.minecraft.world.entity.ai.behavior.warden.SonicBoom.tick(SonicBoom.java:75)",
+];
 
 pub struct SonicBoom {
     state: BehaviorState,
@@ -44,6 +49,8 @@ pub fn set_cooldown(level: &mut ServerLevel, body: EntityId, cooldown: i32) {
 }
 
 impl Behavior for SonicBoom {
+    const TICK_FRAMES: &'static [&'static str] = &["net.minecraft.world.entity.ai.behavior.warden.SonicBoom.tick(SonicBoom.java:20)", TICK_OR_STOP];
+
     fn behavior(&self) -> &BehaviorState {
         &self.state
     }
@@ -92,7 +99,7 @@ impl Behavior for SonicBoom {
             level.send_particles("minecraft:sonic_boom", |_| {}, particle_pos.x, particle_pos.y, particle_pos.z, 1, (0.0, 0.0, 0.0), 0.0);
         }
         level.entity_play_sound(body, sound_event("minecraft:entity.warden.sonic_boom"), 3.0, 1.0);
-        if level.hurt_server(target, DamageSource::entity(damage_types::SONIC_BOOM, body), 10.0) {
+        if crate::server::main_thread_frames::within(&HURT_TARGET_FRAMES, || level.hurt_server(target, DamageSource::entity(damage_types::SONIC_BOOM, body), 10.0)) {
             let knockback_resistance = level.attribute_value(target, Attribute::KnockbackResistance);
             let knockback_vertical = KNOCKBACK_VERTICAL * (1.0 - knockback_resistance);
             let knockback_horizontal = KNOCKBACK_HORIZONTAL * (1.0 - knockback_resistance);

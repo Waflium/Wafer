@@ -24,7 +24,7 @@ impl ServerLevel {
     }
 
     pub fn minecart_chest_interact(&mut self, id: EntityId, player: EntityId) -> InteractionResult {
-        let result = self.interact_with_container_vehicle(id, player);
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.minecart.MinecartChest.interact(MinecartChest.java:66)"], || self.interact_with_container_vehicle(id, player));
         if result.consumes_action() {
             self.entity_game_event_by(id, crate::world::level::gameevent::game_event::CONTAINER_OPEN, Some(player));
             crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);

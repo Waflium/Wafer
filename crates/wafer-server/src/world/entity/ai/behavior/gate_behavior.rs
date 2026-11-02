@@ -6,6 +6,21 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type::{Erased, MemoryModuleType};
 use crate::world::entity::ai::memory::memory_status::MemoryStatus;
 
+const TICK_OR_STOP_FRAMES: [&str; 12] = [
+    "net.minecraft.world.entity.ai.behavior.GateBehavior.lambda$tickOrStop$1(GateBehavior.java:80)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:186)",
+    "java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:197)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1716)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.world.entity.ai.behavior.GateBehavior.tickOrStop(GateBehavior.java:80)",
+];
+
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum OrderPolicy {
@@ -104,7 +119,7 @@ impl BehaviorControl for GateBehavior {
     fn tick_or_stop(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64) {
         for behavior in self.behaviors.iter_mut() {
             if behavior.get_status() == Status::Running {
-                behavior.tick_or_stop(level, body, timestamp);
+                crate::server::main_thread_frames::within(&TICK_OR_STOP_FRAMES, || behavior.tick_or_stop(level, body, timestamp));
             }
         }
         if self.behaviors.iter().all(|behavior| behavior.get_status() != Status::Running) {

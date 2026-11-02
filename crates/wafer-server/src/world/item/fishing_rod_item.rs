@@ -10,8 +10,8 @@ use crate::world::{InteractionHand, InteractionResult};
 pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand) -> (InteractionResult, Option<ItemStack>) {
     let Some(item_stack) = level.player(player).item_in_hand(hand) else { return (InteractionResult::Pass, None) };
     if let Some(fishing) = level.player(player).fishing {
-        let dmg = level.fishing_hook_retrieve(fishing, &item_stack);
-        level.hurt_and_break(player, hand.as_equipment_slot(), dmg);
+        let dmg = crate::server::main_thread_frames::within(&["net.minecraft.world.item.FishingRodItem.use(FishingRodItem.java:27)"], || level.fishing_hook_retrieve(fishing, &item_stack));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.item.FishingRodItem.use(FishingRodItem.java:28)"], || level.hurt_and_break(player, hand.as_equipment_slot(), dmg));
         let e = level.entity(player);
         let (x, y, z) = (e.x(), e.y(), e.z());
         let pitch = 0.4 / (level.random.next_float() * 0.4 + 0.8);

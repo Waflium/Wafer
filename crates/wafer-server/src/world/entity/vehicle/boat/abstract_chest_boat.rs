@@ -34,7 +34,7 @@ impl ServerLevel {
         if self.can_add_passenger(id, player) && !self.player(player).is_secondary_use_active() {
             return InteractionResult::Pass;
         }
-        let result = self.interact_with_container_vehicle(id, player);
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.boat.AbstractChestBoat.interact(AbstractChestBoat.java:87)"], || self.interact_with_container_vehicle(id, player));
         if result.consumes_action() {
             self.entity_game_event_by(id, crate::world::level::gameevent::game_event::CONTAINER_OPEN, Some(player));
             crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);

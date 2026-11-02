@@ -51,7 +51,9 @@ impl PiercingWeapon {
         let mut hit_something = false;
         let hits = level.get_hit_entities_along(attacker, &attack_range, |level, e| can_hit_entity(level, attacker, e), ClipBlock::Collider).right().unwrap_or_default();
         for hit_result in hits {
-            hit_something |= level.stab_attack(attacker, hand, hit_result.entity, damage, true, self.deals_knockback, self.dismounts);
+            hit_something |= crate::server::main_thread_frames::within(&["net.minecraft.world.item.component.PiercingWeapon.attack(PiercingWeapon.java:82)"], || {
+                level.stab_attack(attacker, hand, hit_result.entity, damage, true, self.deals_knockback, self.dismounts)
+            });
         }
         level.on_attack(attacker);
         crate::server::main_thread_frames::within(&["net.minecraft.world.item.component.PiercingWeapon.attack(PiercingWeapon.java:86)"], || level.post_piercing_attack(attacker));

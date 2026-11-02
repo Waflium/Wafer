@@ -1,7 +1,7 @@
 use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{block_tags, damage_types, mob_effects};
 
-use super::behavior::{Behavior, BehaviorState};
+use super::behavior::{Behavior, BehaviorState, TICK_OR_STOP};
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::util::valueproviders::IntProvider;
 use crate::world::damagesource::DamageSource;
@@ -67,6 +67,8 @@ impl RamTarget {
 }
 
 impl Behavior for RamTarget {
+    const TICK_FRAMES: &'static [&'static str] = &["net.minecraft.world.entity.ai.behavior.RamTarget.tick(RamTarget.java:31)", TICK_OR_STOP];
+
     fn behavior(&self) -> &BehaviorState {
         &self.behavior
     }
@@ -97,7 +99,7 @@ impl Behavior for RamTarget {
         if let Some(&ram_target) = nearby_entities.first() {
             let damage_source = DamageSource::entity(damage_types::MOB_ATTACK_NO_AGGRO, body);
             let damage = level.attribute_value(body, Attribute::AttackDamage) as f32;
-            if level.hurt_server(ram_target, damage_source, damage) {
+            if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.behavior.RamTarget.tick(RamTarget.java:97)"], || level.hurt_server(ram_target, damage_source, damage)) {
                 level.do_post_attack_effects(ram_target, &damage_source);
             }
             let living = level.living(body);

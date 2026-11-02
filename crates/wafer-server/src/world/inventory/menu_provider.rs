@@ -168,7 +168,14 @@ impl ServerLevel {
                 if self.container_entity(entity).is_some_and(|container| container.has_loot_table()) && spectator {
                     return None;
                 }
-                self.unpack_chest_vehicle_loot_table(entity, Some(player));
+                let create_menu_frames: &'static [&'static str] = match self.find_entity(entity) {
+                    Some(LevelEntity::Minecart(_)) => &["net.minecraft.world.entity.vehicle.minecart.AbstractMinecartContainer.createMenu(AbstractMinecartContainer.java:134)"],
+                    _ => &[
+                        "net.minecraft.world.entity.vehicle.boat.AbstractChestBoat.unpackLootTable(AbstractChestBoat.java:160)",
+                        "net.minecraft.world.entity.vehicle.boat.AbstractChestBoat.createMenu(AbstractChestBoat.java:153)",
+                    ],
+                };
+                main_thread_frames::within(create_menu_frames, || self.unpack_chest_vehicle_loot_table(entity, Some(player)));
                 let title = self.display_name(entity);
                 let container = ContainerRef::ChestVehicle(entity);
                 self.container_start_open(container, player);

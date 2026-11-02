@@ -385,7 +385,7 @@ impl ServerLevel {
     }
 
     pub fn villager_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "villagerBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.Villager.customServerAiStep(Villager.java:236)"], || Brain::tick_in_zone(self, id, "villagerBrain"));
         if self.mob(id).is_none() {
             return;
         }

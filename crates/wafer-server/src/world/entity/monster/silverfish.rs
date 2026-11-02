@@ -96,7 +96,7 @@ impl ServerLevel {
         if source.causing_entity.is_some() || source.is(&damage_type_tags::ALWAYS_TRIGGERS_SILVERFISH) {
             friends_goal_mut(self.mob_mut(id).expect("a silverfish")).notify_hurt();
         }
-        self.living_entity_hurt_server(id, source, damage)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Silverfish.hurtServer(Silverfish.java:98)"], || self.living_entity_hurt_server(id, source, damage))
     }
 
     pub fn silverfish_tick(&mut self, id: EntityId) {

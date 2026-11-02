@@ -460,7 +460,9 @@ impl ServerLevel {
         let hook = hook(self.projectile(id));
         if let Some(hooked_in) = hook.hooked_in {
             self.fishing_hook_pull_entity(id, hooked_in);
-            criteria_triggers::FISHING_ROD_HOOKED.trigger(self, owner, rod, id, &[]);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FishingHook.retrieve(FishingHook.java:481)"], || {
+                criteria_triggers::FISHING_ROD_HOOKED.trigger(self, owner, rod, id, &[])
+            });
             self.broadcast_entity_event(id, 31);
             dmg = if matches!(self.find_entity(hooked_in), Some(LevelEntity::Item(_))) { 3 } else { 5 };
         } else if hook.nibble > 0 {
@@ -473,7 +475,9 @@ impl ServerLevel {
             params.this_entity = Some(id);
             params.luck = luck;
             let items = loot_table.get_random_items(params);
-            criteria_triggers::FISHING_ROD_HOOKED.trigger(self, owner, rod, id, &items);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FishingHook.retrieve(FishingHook.java:493)"], || {
+                criteria_triggers::FISHING_ROD_HOOKED.trigger(self, owner, rod, id, &items)
+            });
             for item_stack in items {
                 let e = self.entity(id);
                 let (x, y, z) = (e.x(), e.y(), e.z());

@@ -7,6 +7,7 @@ use crate::world::entity::ai::memory::memory_module_type::{Erased, MemoryModuleT
 use crate::world::entity::ai::memory::memory_status::MemoryStatus;
 
 pub const DEFAULT_DURATION: i32 = 60;
+pub const TICK_OR_STOP: &str = "net.minecraft.world.entity.ai.behavior.Behavior.tickOrStop(Behavior.java:66)";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
@@ -37,6 +38,8 @@ impl BehaviorState {
 }
 
 pub trait Behavior {
+    const TICK_FRAMES: &'static [&'static str] = &[TICK_OR_STOP];
+
     fn behavior(&self) -> &BehaviorState;
 
     fn behavior_mut(&mut self) -> &mut BehaviorState;
@@ -94,7 +97,7 @@ impl<T: Behavior + 'static> BehaviorControl for T {
 
     fn tick_or_stop(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64) {
         if !self.timed_out(timestamp) && self.can_still_use(level, body, timestamp) {
-            self.tick(level, body, timestamp);
+            crate::server::main_thread_frames::within(Self::TICK_FRAMES, || self.tick(level, body, timestamp));
         } else {
             self.do_stop(level, body, timestamp);
         }
