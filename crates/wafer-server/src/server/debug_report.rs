@@ -48,6 +48,7 @@ impl Server {
     }
 
     fn save_level_debug_report(&mut self, index: usize, root_dir: &Path) -> io::Result<()> {
+        self.levels[index].chunks.add_unknown_tickets();
         {
             let mut output = BufWriter::new(File::create(root_dir.join("stats.txt"))?);
             self.levels[index].write_debug_stats(&mut output)?;

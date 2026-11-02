@@ -45,6 +45,7 @@ use std::rc::Rc;
 
 use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::util::profiling::profiler;
+use crate::world::entity::ai::village::poi::poi_types;
 use crate::util::FastIndexMap;
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -785,7 +786,18 @@ impl ServerLevel {
     }
 
     pub fn update_poi_on_block_state_change(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
-        self.chunks.poi_manager.update_on_block_state_change(pos, old, new);
+        let (old_type, new_type) = (poi_types::for_state(old), poi_types::for_state(new));
+        if old_type == new_type {
+            return;
+        }
+        if old_type.is_some() {
+            profiler::increment_counter("runTask", 1);
+            self.chunks.poi_manager.remove(pos);
+        }
+        if let Some(poi_type) = new_type {
+            profiler::increment_counter("runTask", 1);
+            self.chunks.poi_manager.add(pos, poi_type);
+        }
     }
 
     pub fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, current: BlockState) {

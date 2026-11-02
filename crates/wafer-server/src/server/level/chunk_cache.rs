@@ -25,6 +25,7 @@ use crate::util::profiling::profiler;
 use crate::world::difficulty::Difficulty;
 use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::entity::ai::village::poi::poi_manager::PoiManager;
+use crate::world::entity::ai::village::poi::poi_types;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::debug_level_source;
 use crate::world::level::chunk::serialization::{self, SectionLight};
@@ -123,6 +124,7 @@ pub struct ChunkCache {
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
     last_chunk: Cell<[Option<(ChunkPos, ChunkStatus, bool)>; 4]>,
+    unknown_tickets_to_add: RefCell<Vec<ChunkPos>>,
     server_view_distance: i32,
     live_futures: usize,
     pub block_entity_tickers: BlockEntityTickers,
@@ -193,6 +195,7 @@ impl ChunkCache {
             scoreboard: Rc::default(),
             full_status_changes: VecDeque::new(),
             last_chunk: Cell::new([None; 4]),
+            unknown_tickets_to_add: RefCell::new(Vec::new()),
             server_view_distance: 0,
             live_futures: 0,
             tick_deadline: None,
@@ -261,18 +264,32 @@ impl ChunkCache {
     }
 
     pub fn add_ticket(&mut self, ticket: Ticket, pos: ChunkPos) {
+        self.add_unknown_tickets();
         self.distance_manager.add_ticket(&mut self.holders, pos.pack(), ticket);
     }
 
+    pub fn add_unknown_tickets(&mut self) {
+        if self.unknown_tickets_to_add.get_mut().is_empty() {
+            return;
+        }
+        let ticket = Ticket::new(TicketType::Unknown, chunk_level::by_status(ChunkStatus::Full));
+        for pos in std::mem::take(self.unknown_tickets_to_add.get_mut()) {
+            self.distance_manager.add_ticket(&mut self.holders, pos.pack(), ticket);
+        }
+    }
+
     pub fn remove_ticket(&mut self, ticket: Ticket, pos: ChunkPos) {
+        self.add_unknown_tickets();
         self.distance_manager.remove_ticket(&mut self.holders, pos.pack(), ticket);
     }
 
     pub fn add_ticket_with_radius(&mut self, ty: TicketType, pos: ChunkPos, radius: i32) {
+        self.add_unknown_tickets();
         self.distance_manager.add_ticket_with_radius(&mut self.holders, ty, pos, radius);
     }
 
     pub fn remove_ticket_with_radius(&mut self, ty: TicketType, pos: ChunkPos, radius: i32) {
+        self.add_unknown_tickets();
         self.distance_manager.remove_ticket_with_radius(&mut self.holders, ty, pos, radius);
     }
 
@@ -289,6 +306,7 @@ impl ChunkCache {
     }
 
     pub fn update_chunk_forced(&mut self, pos: ChunkPos, forced: bool) -> bool {
+        self.add_unknown_tickets();
         self.distance_manager.update_chunk_forced(&mut self.holders, pos, forced)
     }
 
@@ -321,7 +339,7 @@ impl ChunkCache {
     }
 
     pub fn main_thread_pending_tasks(&self) -> usize {
-        self.distance_manager.main_thread_tasks.len() + self.holders.futures.woken.len() + self.arrived.len()
+        self.distance_manager.main_thread_tasks.len() + self.arrived.values().filter(|result| matches!(result, WorkResult::Loaded { .. })).count()
     }
 
     pub fn light_queue_size(&self) -> usize {
@@ -408,6 +426,7 @@ impl ChunkCache {
         profiler::increment_counter("getChunk", 1);
         if self.cached_chunk(pos, ChunkStatus::Full, true).is_none() {
             profiler::increment_counter("getChunkCacheMiss", 1);
+            self.unknown_tickets_to_add.borrow_mut().push(pos);
             self.store_in_cache(pos, ChunkStatus::Full, self.is_full(pos.pack()));
         }
     }
@@ -613,7 +632,6 @@ impl ChunkCache {
             return false;
         }
         let result = self.wait_for_result();
-        profiler::increment_counter("runTask", 1);
         self.apply_work_result(result);
         true
     }
@@ -781,7 +799,7 @@ impl ChunkCache {
         let tickets = &self.distance_manager.ticket_storage;
         for key in self.holders.ordered_keys() {
             let holder = &self.holders.map[&key];
-            let chunk = holder.loaded.as_deref();
+            let full_chunk = if holder.status_done(&self.holders.futures, ChunkStatus::Full) { self.chunks.get(&holder.pos) } else { None };
             let full_status = match holder.full_status() {
                 FullChunkStatus::Inaccessible => "INACCESSIBLE",
                 FullChunkStatus::Full => "FULL",
@@ -792,19 +810,19 @@ impl ChunkCache {
                 Some(holder.pos.x.to_string()),
                 Some(holder.pos.z.to_string()),
                 Some(holder.ticket_level.to_string()),
-                Some(chunk.is_some().to_string()),
+                Some(holder.persisted_status.is_some().to_string()),
                 holder.persisted_status.map(|status| format!("minecraft:{}", status.get_name())),
-                chunk.map(|_| full_status.to_string()),
+                full_chunk.map(|_| full_status.to_string()),
                 Some(print_future(holder.full_chunk_future).to_string()),
                 Some(print_future(holder.ticking_chunk_future).to_string()),
                 Some(print_future(holder.entity_ticking_chunk_future).to_string()),
                 Some(tickets.get_ticket_debug_string(key, false)),
                 Some(any_player_close_enough_for_spawning(holder.pos).to_string()),
-                Some(chunk.map_or(0, |chunk| chunk.block_entities.map.len()).to_string()),
+                Some(full_chunk.map_or(0, |chunk| chunk.block_entities.map.len()).to_string()),
                 Some(tickets.get_ticket_debug_string(key, true)),
                 Some(self.distance_manager.simulation_level(key).to_string()),
-                Some(chunk.map_or(0, |_| self.block_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
-                Some(chunk.map_or(0, |_| self.fluid_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
+                Some(full_chunk.map_or(0, |_| self.block_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
+                Some(full_chunk.map_or(0, |_| self.fluid_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
             ])?;
         }
         Ok(())
@@ -815,6 +833,7 @@ impl ChunkCache {
     }
 
     pub fn purge_stale_tickets(&mut self) {
+        self.add_unknown_tickets();
         self.distance_manager.purge_stale_tickets(&mut self.holders);
     }
 
@@ -852,14 +871,6 @@ impl ChunkCache {
     }
 
     pub fn poll_task(&mut self) -> bool {
-        let ran = self.run_one_task();
-        if ran {
-            profiler::increment_counter("runTask", 1);
-        }
-        ran
-    }
-
-    fn run_one_task(&mut self) -> bool {
         if self.process_woken() {
             return true;
         }
@@ -868,7 +879,7 @@ impl ChunkCache {
         }
         self.light_engine.try_schedule_update();
         if let Some(task) = self.distance_manager.main_thread_tasks.pop_front() {
-            self.run_main_thread_task(task);
+            self.do_run_task(task);
             return true;
         }
         if self.run_worldgen() {
@@ -882,6 +893,11 @@ impl ChunkCache {
             return true;
         }
         false
+    }
+
+    fn do_run_task(&mut self, task: MainThreadTask) {
+        profiler::increment_counter("runTask", 1);
+        self.run_main_thread_task(task);
     }
 
     pub fn waker(&self) -> ResultSender {
@@ -904,7 +920,6 @@ impl ChunkCache {
             Ok(result) => {
                 self.store_arrived(result);
                 if let Some(result) = self.next_ready_result() {
-                    profiler::increment_counter("runTask", 1);
                     self.apply_work_result(result);
                 }
             }
@@ -944,6 +959,7 @@ impl ChunkCache {
     }
 
     pub fn run_distance_manager_updates(&mut self) -> bool {
+        self.add_unknown_tickets();
         let updated = self.distance_manager.run_tracker_updates(&mut self.holders);
         let result = if !self.holders.chunks_to_update_futures.is_empty() {
             let nodes: Vec<i64> = std::mem::take(&mut self.holders.chunks_to_update_futures).into_iter().collect();
@@ -1134,7 +1150,8 @@ impl ChunkCache {
             MainThreadTask::FullChunkStatusChange { node, status } => self.full_status_changes.push_back((ChunkPos::unpack(node), status)),
             MainThreadTask::ChunkReadyToSend(node) => self.chunks_ready_to_send.push(ChunkPos::unpack(node)),
             MainThreadTask::LightUpdate { layer, node } => self.run_light_update_task(layer, node),
-            MainThreadTask::Run { .. } | MainThreadTask::RemoveTicket(_) | MainThreadTask::Poll | MainThreadTask::ReleasePlayerTicket(_) => {
+            MainThreadTask::CompleteChunkLoad(token) => self.run_complete_chunk_load(token),
+            MainThreadTask::Run { .. } | MainThreadTask::UpdatePlayerTicket(_) | MainThreadTask::RemoveTicket(_) | MainThreadTask::ReleasePlayerTicket(_) => {
                 self.distance_manager.run_main_thread_task(&mut self.holders, task)
             }
         }
@@ -1938,11 +1955,28 @@ impl ChunkCache {
             }
         }
         for (pos, old, new) in poi_updates {
-            self.poi_manager.update_on_block_state_change(pos, old, new);
+            self.update_poi_on_block_state_change(pos, old, new);
         }
         self.world_gen_entity_teams.extend(entity_teams);
         self.world_gen_entity_sounds.extend(entity_sounds);
         result
+    }
+
+    fn update_poi_on_block_state_change(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
+        let Some((tasks, level)) = &self.server_tasks else {
+            self.poi_manager.update_on_block_state_change(pos, old, new);
+            return;
+        };
+        let (old_type, new_type) = (poi_types::for_state(old), poi_types::for_state(new));
+        if old_type == new_type {
+            return;
+        }
+        if old_type.is_some() {
+            tasks.execute(Task::RemovePoi { level: *level, pos });
+        }
+        if let Some(poi_type) = new_type {
+            tasks.execute(Task::AddPoi { level: *level, pos, poi_type });
+        }
     }
 
     fn is_lighted(&self, pos: ChunkPos) -> bool {
@@ -1953,7 +1987,9 @@ impl ChunkCache {
     fn schedule_chunk_load(&mut self, job: Job) {
         let pos = job.pos;
         if self.io.is_none() {
-            self.apply_loaded(job, Ok(None));
+            let token = self.new_token(job);
+            self.loaded_results.insert(token, Ok(None));
+            self.distance_manager.main_thread_tasks.push_back(MainThreadTask::ApplyLoaded(token));
             return;
         }
         let token = self.new_async_token(job);
@@ -2055,6 +2091,12 @@ impl ChunkCache {
             None => ChunkStatus::Empty,
         };
         self.holders.get_mut(pos.pack()).unwrap().persisted_status = Some(persisted);
+        let token = self.new_token(job);
+        self.distance_manager.main_thread_tasks.push_back(MainThreadTask::CompleteChunkLoad(token));
+    }
+
+    fn run_complete_chunk_load(&mut self, token: u64) {
+        let job = self.jobs.remove(&token).expect("chunk load job");
         self.complete_step(job);
     }
 
@@ -2629,6 +2671,21 @@ mod tests {
         assert!(matches!(cache.next_ready_result(), Some(WorkResult::Loaded { token: 2, .. })));
         cache.in_flight.pop_front();
         assert!(cache.next_ready_result().is_none());
+    }
+
+    #[test]
+    fn chunk_dumps_mark_every_started_chunk_in_memory_and_give_full_chunks_their_status() {
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
+        cache.update_chunk_forced(ChunkPos::new(0, 0), true);
+        cache.run_until_idle();
+        let mut output = Vec::new();
+        cache.dump_chunks(&mut output, |_| false).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        let row = |x: i32, z: i32| output.lines().find(|line| line.starts_with(&format!("{x},{z},"))).map(|line| line.split(',').skip(2).take(4).collect::<Vec<_>>().join(","));
+        assert_eq!(row(0, 0).as_deref(), Some("31,true,minecraft:full,ENTITY_TICKING"));
+        assert_eq!(row(2, 0).as_deref(), Some("33,true,minecraft:full,FULL"));
+        assert_eq!(row(3, 0).as_deref(), Some("34,true,minecraft:initialize_light,[null]"));
+        assert_eq!(row(13, 0).as_deref(), Some("44,true,minecraft:structure_starts,[null]"));
     }
 
     #[test]

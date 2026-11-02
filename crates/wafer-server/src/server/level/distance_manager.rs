@@ -279,23 +279,26 @@ impl DistanceManager {
         let ticket = Ticket::new(TicketType::PlayerLoading, PLAYER_TICKET_LEVEL);
         match task {
             MainThreadTask::Run { pos, last_of_batch } => {
+                self.main_thread_tasks.push_back(MainThreadTask::UpdatePlayerTicket(pos));
+                if last_of_batch {
+                    self.ticket_dispatcher.poll_task();
+                }
+            }
+            MainThreadTask::UpdatePlayerTicket(pos) => {
                 if self.have_ticket_for(self.player_ticket_manager.chunks.get(pos) as i32) {
                     self.add_ticket(holders, pos, ticket);
                     self.tickets_to_release.add(pos);
                 } else {
                     self.ticket_dispatcher.release(pos, false, false);
                 }
-                if last_of_batch {
-                    self.ticket_dispatcher.poll_task();
-                }
             }
             MainThreadTask::RemoveTicket(pos) => {
                 self.remove_ticket(holders, pos, ticket);
             }
-            MainThreadTask::Poll => self.ticket_dispatcher.poll_task(),
             MainThreadTask::ReleasePlayerTicket(pos) => self.ticket_dispatcher.release(pos, false, false),
             MainThreadTask::FullStep(_)
             | MainThreadTask::ApplyLoaded(_)
+            | MainThreadTask::CompleteChunkLoad(_)
             | MainThreadTask::PrepareTickingChunk(_)
             | MainThreadTask::FullChunkStatusChange { .. }
             | MainThreadTask::ChunkReadyToSend(_)

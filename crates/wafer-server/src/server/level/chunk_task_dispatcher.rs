@@ -104,11 +104,12 @@ impl Message {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MainThreadTask {
     Run { pos: i64, last_of_batch: bool },
+    UpdatePlayerTicket(i64),
     RemoveTicket(i64),
-    Poll,
     ReleasePlayerTicket(i64),
     FullStep(u64),
     ApplyLoaded(u64),
+    CompleteChunkLoad(u64),
     PrepareTickingChunk(u64),
     FullChunkStatusChange { node: i64, status: FullChunkStatus },
     ChunkReadyToSend(i64),
@@ -201,7 +202,7 @@ impl ThrottlingChunkTaskDispatcher {
                         Some((pos, tasks)) => {
                             self.chunk_positions_in_execution.add(pos);
                             if tasks.is_empty() {
-                                out.push_back(MainThreadTask::Poll);
+                                self.poll_task();
                             }
                             let count = tasks.len();
                             for i in 0..count {

@@ -250,6 +250,8 @@ pub(crate) enum Task {
     StructureStarts { level: usize, pos: wafer_core::ChunkPos, starts: wafer_core::hash_map::FastMap<crate::world::level::levelgen::structure::structure::StructureHolder, i32> },
     Remote(ServerTask),
     EntityDeserializer(usize),
+    RemovePoi { level: usize, pos: wafer_core::BlockPos },
+    AddPoi { level: usize, pos: wafer_core::BlockPos, poi_type: crate::world::entity::ai::village::poi::poi_types::PoiType },
 }
 
 pub(crate) struct TickTask {
@@ -857,13 +859,17 @@ impl Server {
         false
     }
 
-    fn poll_server_task(&mut self) -> bool {
-        crate::crash_report::throw_delayed_exception();
+    pub(crate) fn execute_remote_tasks(&self) {
         if let Some(remote_tasks) = &self.remote_tasks {
             while let Ok(task) = remote_tasks.try_recv() {
                 self.tasks.execute(Task::Remote(task));
             }
         }
+    }
+
+    fn poll_server_task(&mut self) -> bool {
+        crate::crash_report::throw_delayed_exception();
+        self.execute_remote_tasks();
         for index in 0..self.levels.len() {
             self.register_entity_deserializer(index);
         }
@@ -1640,6 +1646,10 @@ impl Server {
             Task::EntityDeserializer(level) => {
                 self.levels[level].run_entity_deserializer();
                 self.register_entity_deserializer(level);
+            }
+            Task::RemovePoi { level, pos } => self.levels[level].chunks.poi_manager.remove(pos),
+            Task::AddPoi { level, pos, poi_type } => {
+                self.levels[level].chunks.poi_manager.add(pos, poi_type);
             }
             _ => {}
         }

@@ -217,21 +217,80 @@ fn has_entities_counts_only_itself() {
 }
 
 #[test]
-fn every_chunk_main_thread_task_counts_one_run_task() {
-    let mut level = level();
-    level.chunks.add_ticket_with_radius(crate::server::level::ticket::TicketType::Forced, ChunkPos::new(6, 6), 1);
-    let mut ran = 0;
+fn a_chunk_load_runs_the_read_and_its_completion_as_two_main_thread_tasks() {
+    use crate::server::level::chunk_level::ChunkStatus;
+    let mut level = testing::level();
     let counted = counters(|| {
-        for _ in 0..400 {
-            if level.chunks.poll_task() {
-                ran += 1;
-            } else {
-                std::thread::sleep(Duration::from_millis(5));
-            }
+        let future = level.chunks.begin_chunk_at_status(ChunkPos::new(9, 9), ChunkStatus::Empty).expect("a chunk to load");
+        while !level.chunks.is_future_done(future) {
+            assert!(level.chunks.poll_task());
         }
     });
-    assert!(ran > 0);
-    assert_eq!(count(&counted, "runTask"), ran);
+    assert_eq!((count(&counted, "chunkLoad"), count(&counted, "runTask")), (1, 2));
+}
+
+#[test]
+fn generating_chunks_counts_only_the_main_thread_tasks() {
+    let mut level = level();
+    level.chunks.add_ticket_with_radius(crate::server::level::ticket::TicketType::Forced, ChunkPos::new(6, 6), 1);
+    let mut polled = 0;
+    let counted = counters(|| {
+        while level.chunks.run_idle_step() {
+            polled += 1;
+        }
+    });
+    let loaded = count(&counted, "chunkLoad");
+    assert!(loaded > 0);
+    assert!(count(&counted, "runTask") >= 2 * loaded);
+    assert!(count(&counted, "runTask") < polled);
+}
+
+#[test]
+fn placing_a_point_of_interest_runs_its_task_inline() {
+    let mut level = level();
+    let pos = BlockPos::new(3, -60, 3);
+    let counted = counters(|| {
+        level.set_block(pos, blocks::BELL.default_state(), UPDATE_CLIENTS);
+    });
+    assert_eq!(count(&counted, "runTask"), 1);
+    let counted = counters(|| {
+        level.set_block(pos, blocks::COMPOSTER.default_state(), UPDATE_CLIENTS);
+    });
+    assert_eq!(count(&counted, "runTask"), 2);
+}
+
+#[test]
+fn a_live_region_read_that_misses_the_chunk_cache_adds_an_unknown_ticket() {
+    use crate::server::level::ticket::TicketType;
+    use crate::world::level::path_navigation_region::PathNavigationRegion;
+    let mut level = level();
+    let pos = ChunkPos::new(1, 1);
+    let has_unknown_ticket = |level: &ServerLevel| level.chunks.distance_manager.ticket_storage.tickets(pos.pack()).iter().any(|t| t.ty == TicketType::Unknown);
+    level.chunks.purge_stale_tickets();
+    level.chunks.purge_stale_tickets();
+    assert!(!has_unknown_ticket(&level));
+    for x in -2..=1 {
+        level.chunks.get_chunk_now(ChunkPos::new(x, -2));
+    }
+    PathNavigationRegion::new(&level).get_block_state(pos_in(pos));
+    PathNavigationRegion::new(&level).get_block_state(pos_in(pos));
+    level.chunks.add_unknown_tickets();
+    assert!(has_unknown_ticket(&level));
+    level.chunks.purge_stale_tickets();
+    level.chunks.purge_stale_tickets();
+    assert!(!has_unknown_ticket(&level));
+    PathNavigationRegion::new(&level).get_block_state(pos_in(pos));
+    level.chunks.add_unknown_tickets();
+    assert!(!has_unknown_ticket(&level));
+}
+
+#[test]
+fn a_live_region_reads_void_air_above_the_build_height() {
+    use crate::world::level::path_navigation_region::PathNavigationRegion;
+    let level = level();
+    assert_eq!(PathNavigationRegion::new(&level).get_block_state(BlockPos::new(3, 400, 3)), blocks::VOID_AIR.default_state());
+    let snapshot = PathNavigationRegion::snapshot(&level, BlockPos::new(0, -61, 0), BlockPos::new(5, -50, 5));
+    assert_eq!(snapshot.get_block_state(BlockPos::new(3, 400, 3)), blocks::AIR.default_state());
 }
 
 #[test]
