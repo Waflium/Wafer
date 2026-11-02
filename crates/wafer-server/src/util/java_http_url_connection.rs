@@ -327,7 +327,14 @@ impl Failure {
                 JavaThrowable::new("java.io.IOException: Premature EOF", concat(&[head, &body_read_tail(*status)]))
             }
             Failure::Other(message) => JavaThrowable::new(format!("java.io.IOException: {message}"), Vec::new()),
-            Failure::TooManyRedirects(redirects) => JavaThrowable::new(format!("java.net.ProtocolException: Server redirected too many times ({redirects})"), Vec::new()),
+            Failure::TooManyRedirects(redirects) => {
+                let mut frames = vec!["java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1708)", GET_INPUT_STREAM, GET_RESPONSE_CODE];
+                if https {
+                    frames.push(HTTPS_GET_RESPONSE_CODE);
+                }
+                frames.push(READ_SERVICE_RESPONSE_130);
+                JavaThrowable::new(format!("java.net.ProtocolException: Server redirected too many times ({redirects})"), frames)
+            }
         }
     }
 

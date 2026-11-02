@@ -1,6 +1,6 @@
 pub const JAVA_VENDOR: &str = "Microsoft";
 pub const JAVA_VM_NAME: &str = "OpenJDK 64-Bit Server VM";
-pub const JAVA_VM_INFO: &str = "mixed mode, sharing";
+pub const JAVA_VM_INFO: &str = "mixed mode";
 pub const JAVA_VM_VENDOR: &str = "Microsoft";
 pub const PROCESS_NAME: &str = "java";
 

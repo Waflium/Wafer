@@ -237,7 +237,7 @@ fn memory_lines_use_the_emulated_heap() {
 fn java_fields_describe_the_bundled_runtime() {
     let lines = lines(&report(None, false));
     assert!(lines.contains(&format!("Java Version: {}, Microsoft", java_runtime::java_version())));
-    assert!(lines.contains(&"Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Microsoft".to_string()));
+    assert!(lines.contains(&"Java VM Version: OpenJDK 64-Bit Server VM (mixed mode), Microsoft".to_string()));
     assert!(lines.iter().any(|line| line.starts_with("Operating System: ") && line.contains(") version ")));
     assert!(lines.contains(&format!("Minecraft Version: {}", wafer_data::VERSION_NAME)));
 }
