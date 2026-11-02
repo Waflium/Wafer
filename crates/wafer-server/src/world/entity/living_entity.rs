@@ -766,7 +766,7 @@ impl ServerLevel {
             return false;
         }
         let aabb = self.entity(id).dimensions.make_bounding_box(Vec3::new(xx, y, zz));
-        if self.no_collision(&aabb) && self.entity_collisions(None, &aabb).is_empty() && !self.contains_any_liquid(&aabb) {
+        if self.no_collision(&aabb) && !self.contains_any_liquid(&aabb) {
             let from = BlockPos::containing(aabb.min_x, aabb.min_y, aabb.min_z);
             let to = BlockPos::containing(aabb.max_x, aabb.max_y, aabb.max_z);
             let has_invalid_position = self.find_blocks_in(from, to).filter_state(is_invalid_position).any_matched(self);

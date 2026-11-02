@@ -19,7 +19,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let rotation = place_context.rotation();
     let pos = Vec3::at_bottom_center_of(block_pos);
     let bounding_box = armor_stand::DIMENSIONS.make_bounding_box(pos);
-    if !level.no_collision(&bounding_box) || !level.entity_collisions(None, &bounding_box).is_empty() || !level.get_entities(None, &bounding_box).is_empty() {
+    if !level.no_collision(&bounding_box) || !level.get_entities(None, &bounding_box).is_empty() {
         return InteractionResult::Fail;
     }
     let Some(mut entity) = level.create_entity_type_from_stack("minecraft:armor_stand", Some(&item_stack), block_pos, EntitySpawnReason::SpawnItemUse, true, true) else {

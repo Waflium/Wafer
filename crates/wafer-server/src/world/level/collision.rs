@@ -202,7 +202,7 @@ pub fn for_each_block_collision<'c>(
 
 impl ServerLevel {
     pub fn no_collision(&self, box_: &AABB) -> bool {
-        self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty())
+        self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty()) && self.entity_collisions(None, box_).is_empty()
     }
 
     pub fn no_block_collision(&self, entity: EntityId, box_: &AABB) -> bool {
