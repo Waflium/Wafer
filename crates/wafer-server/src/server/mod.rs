@@ -2118,7 +2118,8 @@ impl Server {
             profiler::pop();
         }
         level::lent_levels::LentLevels::lend(self, index).level().begin_block_ticks(runs);
-        while let Some(pos) = self.levels[index].run_block_ticks() {
+        loop {
+            let Some(pos) = level::lent_levels::LentLevels::lend(self, index).level().run_block_ticks() else { break };
             self.command_block_tick(index, pos);
         }
         level::lent_levels::LentLevels::lend(self, index).level().tick_after_block_ticks(runs);
