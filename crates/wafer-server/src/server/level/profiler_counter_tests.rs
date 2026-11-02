@@ -331,6 +331,10 @@ fn io_workers_report_their_queued_requests() {
     let worker = IoWorker::new(RegionStorage::new(dir.clone(), false));
     assert_eq!(worker.queue_size(), 0);
     worker.synchronize(false).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while worker.queue_size() != 0 && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
     assert_eq!(worker.queue_size(), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
