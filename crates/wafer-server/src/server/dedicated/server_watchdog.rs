@@ -329,7 +329,7 @@ fn console_handler_thread() -> ThreadDumpEntry {
         name: "Server console handler".to_string(),
         daemon: true,
         priority: 8,
-        id: 103,
+        id: super::console_handler_id(),
         state: "RUNNABLE",
         lock: None,
         in_native: true,
@@ -536,7 +536,7 @@ fn generic_threads() -> Vec<ThreadDumpEntry> {
 fn jvm_threads() -> Vec<ThreadDumpEntry> {
     let reference_queue_lock = |address: &str| format!("java.lang.ref.ReferenceQueue$Lock@{address}");
     vec![
-        jvm_thread("DestroyJavaVM", false, 5, 104, "RUNNABLE", None, false, Vec::new()),
+        jvm_thread("DestroyJavaVM", false, 5, super::destroy_java_vm_id(), "RUNNABLE", None, false, Vec::new()),
         jvm_thread("Attach Listener", true, 5, 14, "RUNNABLE", None, false, Vec::new()),
         jvm_thread("Notification Thread", true, 9, 32, "RUNNABLE", None, false, Vec::new()),
         jvm_thread("Signal Dispatcher", true, 9, 13, "RUNNABLE", None, false, Vec::new()),

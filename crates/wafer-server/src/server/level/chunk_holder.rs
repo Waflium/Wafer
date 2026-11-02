@@ -187,6 +187,7 @@ pub struct ChunkHolders {
     pub to_drop: LongOpenHashSet,
     pub chunks_to_update_futures: IndexSet<i64>,
     pub modified: bool,
+    pub visible_count: usize,
     next_id: u64,
     next_order: u64,
 }

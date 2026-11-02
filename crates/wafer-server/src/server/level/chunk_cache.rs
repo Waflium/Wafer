@@ -373,7 +373,7 @@ impl ChunkCache {
     }
 
     pub fn loaded_chunks_count(&self) -> usize {
-        self.holders.map.len()
+        self.holders.visible_count
     }
 
     fn chunk_absent(&self, key: i64, target_level: i32) -> bool {
@@ -1011,6 +1011,9 @@ impl ChunkCache {
             updated
         };
         let promoted = std::mem::take(&mut self.holders.modified);
+        if promoted {
+            self.holders.visible_count = self.holders.map.len();
+        }
         self.run_generation_tasks();
         self.process_woken();
         if !result && !promoted {
@@ -2919,6 +2922,8 @@ mod tests {
         assert!(level.chunks.has_chunk(pos.chunk()));
         level.tick();
         assert!(!level.chunks.has_chunk(pos.chunk()));
+        assert_eq!(level.chunks.loaded_chunks_count(), 529);
+        level.tick();
         assert_eq!(level.chunks.loaded_chunks_count(), 0);
         assert!(level.chunks.chunk_if_present(pos.chunk()).is_none());
         assert_eq!(level.block_state(pos), blocks::STONE.default_state());
