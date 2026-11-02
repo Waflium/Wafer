@@ -35,7 +35,7 @@ fn a_data_fixer_exception_fails_the_configuration_task() {
     let mut server = testing::server_with(ServerConfig { world: Some(dir.clone()), ..testing::flat_config() });
     let (reply, mut started) = tokio::sync::oneshot::channel();
     server.start_prepare_spawn(UUID, "Steve", StartedBy::SelectKnownPacks, reply);
-    assert_eq!(started.try_recv(), Ok(Err(())));
+    assert_eq!(started.try_recv(), Ok(Err(super::prepare_spawn_task::Disconnection::Handled)));
     assert!(server.prepare_spawn_tasks.is_empty());
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -94,19 +94,44 @@ fn run(server: &mut crate::server::Server, command: &str) {
     perform_prefixed_command(server, &source, command);
 }
 
+fn moving_piston_moving_a_moving_piston(server: &mut crate::server::Server) -> BlockPos {
+    server.levels[0].chunks.chunk(ChunkPos::new(0, 0));
+    run(server, "forceload add 0 0");
+    server.levels[0].finish_chunk_work();
+    server.tick();
+    run(server, "setblock 8 -50 8 piston[facing=up]");
+    run(server, "setblock 9 -50 8 redstone_block");
+    server.tick();
+    let pos = BlockPos::new(8, -49, 8);
+    *server.levels[0].piston_moving_block_entity(pos).expect("a moving piston") = PistonMovingBlockEntity::new(blocks::MOVING_PISTON.default_state(), Direction::Up, true, false);
+    pos
+}
+
+#[test]
+fn a_join_spawn_search_failing_inside_start_ticks_the_task_once_more_like_vanilla() {
+    use super::prepare_spawn_task::Disconnection;
+    for started_by in [StartedBy::SelectKnownPacks, StartedBy::AcceptCodeOfConduct, StartedBy::ResourcePackResponse] {
+        let mut server = testing::server();
+        let pos = moving_piston_moving_a_moving_piston(&mut server);
+        run(&mut server, "gamerule respawn_radius 0");
+        server.spawn.pos = pos;
+        let (reply, mut started) = tokio::sync::oneshot::channel();
+        server.start_prepare_spawn(UUID, "Steve", started_by, reply);
+        server.managed_block(|server| server.spawn_finders.values().all(|finder| finder.finished().is_some()));
+        server.tick_prepare_spawns(false);
+        assert!(started.try_recv().is_err());
+        server.tick_prepare_spawns(false);
+        assert_eq!(started.try_recv(), Ok(Err(Disconnection::HandledTwice)));
+        assert!(server.prepare_spawn_tasks.is_empty());
+        assert!(server.spawn_finders.is_empty());
+    }
+}
+
 #[test]
 fn a_moving_piston_moving_a_moving_piston_fails_the_spawn_search_with_a_reported_stack_overflow() {
     use crate::server::level::player_spawn_finder::Finished;
     let mut server = testing::server();
-    server.levels[0].chunks.chunk(ChunkPos::new(0, 0));
-    run(&mut server, "forceload add 0 0");
-    server.levels[0].finish_chunk_work();
-    server.tick();
-    run(&mut server, "setblock 8 -50 8 piston[facing=up]");
-    run(&mut server, "setblock 9 -50 8 redstone_block");
-    server.tick();
-    let pos = BlockPos::new(8, -49, 8);
-    *server.levels[0].piston_moving_block_entity(pos).expect("a moving piston") = PistonMovingBlockEntity::new(blocks::MOVING_PISTON.default_state(), Direction::Up, true, false);
+    let pos = moving_piston_moving_a_moving_piston(&mut server);
     let overflow = crate::util::catch_throwable(|| moving_piston_block::get_collision_shape(&server.levels[0], pos)).unwrap_err();
     assert_eq!(overflow.description, "java.lang.StackOverflowError");
     assert_eq!(overflow.stack_trace.len(), 1024);

@@ -12,7 +12,7 @@ use crate::network::connection::{PacketReader, PacketWriter, disconnection_reaso
 use crate::network::login::Profile;
 use crate::server::Event;
 use crate::server::dedicated::dedicated_server_properties::ServerResourcePackInfo;
-use crate::server::network::prepare_spawn_task::StartedBy;
+use crate::server::network::prepare_spawn_task::{Disconnection, Started, StartedBy};
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
 use crate::world::level::storage::format_uuid;
 
@@ -95,8 +95,9 @@ struct ServerConfigurationPacketListener<'a> {
     config: &'a ServerConfig,
     profile: &'a Profile,
     events: &'a mpsc::UnboundedSender<Event>,
-    prepare_spawn: Option<oneshot::Receiver<Result<(), ()>>>,
+    prepare_spawn: Option<oneshot::Receiver<Started>>,
     spawn_requested: bool,
+    disconnection: Disconnection,
     configuration_tasks: VecDeque<ConfigurationTask>,
     current_task: Option<ConfigurationTask>,
     client_information: ClientInfo,
@@ -120,6 +121,7 @@ pub async fn configure(
         events,
         prepare_spawn: None,
         spawn_requested: false,
+        disconnection: Disconnection::Handled,
         configuration_tasks: VecDeque::new(),
         current_task: None,
         client_information: cookie.client_information,
@@ -132,6 +134,9 @@ pub async fn configure(
         Ok(()) => Some(CommonListenerCookie { latency: listener.latency, client_information: listener.client_information, transferred: cookie.transferred }),
         Err(reason) => {
             info!(thread: SERVER_THREAD, "{} ({}) lost connection: {}", profile.name, format_uuid(profile.uuid), reason.get_string());
+            if listener.disconnection == Disconnection::HandledTwice {
+                warn!(thread: SERVER_THREAD, "handleDisconnection() called twice");
+            }
             if listener.spawn_requested {
                 let _ = events.send(Event::PrepareSpawnClosed { uuid: profile.uuid });
             }
@@ -151,7 +156,8 @@ impl ServerConfigurationPacketListener<'_> {
                 packet = r.recv() => packet.map_err(|e| disconnection_reason(&e))?,
                 started = wait_for_spawn(&mut self.prepare_spawn) => {
                     self.prepare_spawn = None;
-                    if started.is_err() {
+                    if let Err(disconnection) = started {
+                        self.disconnection = disconnection;
                         return Err(self.disconnect(w, Component::translatable("multiplayer.disconnect.configuration_error")).await);
                     }
                     self.finish_current_task(w, ConfigurationTask::PrepareSpawn)?;
@@ -445,7 +451,7 @@ pub fn read_client_information(data: &[u8]) -> anyhow::Result<ClientInfo> {
     })
 }
 
-async fn wait_for_spawn(prepare_spawn: &mut Option<oneshot::Receiver<Result<(), ()>>>) -> Result<(), ()> {
+async fn wait_for_spawn(prepare_spawn: &mut Option<oneshot::Receiver<Started>>) -> Started {
     if let Some(ready) = prepare_spawn {
         if let Ok(started) = ready.await {
             return started;

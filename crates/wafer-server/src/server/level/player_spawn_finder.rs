@@ -101,6 +101,7 @@ pub struct PlayerSpawnFinder {
     next_candidate_index: i32,
     pending: Option<Candidate>,
     finished: Option<Finished>,
+    failed_inline: bool,
 }
 
 impl PlayerSpawnFinder {
@@ -117,6 +118,7 @@ impl PlayerSpawnFinder {
             next_candidate_index: 0,
             pending: None,
             finished: None,
+            failed_inline: false,
         }
     }
 
@@ -131,11 +133,16 @@ impl PlayerSpawnFinder {
             next_candidate_index: 0,
             pending: None,
             finished: Some(Finished::Spawn(position)),
+            failed_inline: false,
         }
     }
 
     pub fn finished(&self) -> Option<&Finished> {
         self.finished.as_ref()
+    }
+
+    pub fn failed_inline(&self) -> bool {
+        self.failed_inline
     }
 
     pub fn into_finished(self) -> Option<Finished> {
@@ -308,8 +315,11 @@ impl Server {
                     ("Progress".to_string(), format!("{} out of {}", candidate.index, finder.candidate_count)),
                 ];
                 let reported = searching_for_spawn_exception(cause, callback_frames(&candidate.callback), details);
-                if let Some(finder) = self.spawn_finders.get_mut(&id) {
-                    finder.finished.get_or_insert(Finished::Failed(Box::new(reported)));
+                if let Some(finder) = self.spawn_finders.get_mut(&id)
+                    && finder.finished.is_none()
+                {
+                    finder.finished = Some(Finished::Failed(Box::new(reported)));
+                    finder.failed_inline = matches!(candidate.callback, Callback::Inline(_));
                 }
             }
         }

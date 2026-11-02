@@ -67,6 +67,14 @@ impl StartedBy {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Disconnection {
+    Handled,
+    HandledTwice,
+}
+
+pub type Started = Result<(), Disconnection>;
+
 type SavedPosition = (Option<String>, Option<Vec3>, Option<(f32, f32)>);
 
 fn decode_saved_position(tag: &Nbt) -> DecodeResult<SavedPosition> {
@@ -86,8 +94,9 @@ pub(crate) struct PrepareSpawnTask {
     pub position: Option<Vec3>,
     spawn_finder: Option<u64>,
     pub angle: (f32, f32),
-    pub reply: Option<oneshot::Sender<Result<(), ()>>>,
+    pub reply: Option<oneshot::Sender<Started>>,
     chunk_load_future: Option<FutureId>,
+    ticked_after_failing: bool,
 }
 
 impl PrepareSpawnTask {
@@ -129,7 +138,7 @@ impl Server {
         (level, position, y_rot, x_rot)
     }
 
-    pub(crate) fn start_prepare_spawn(&mut self, uuid: u128, name: &str, started_by: StartedBy, reply: oneshot::Sender<Result<(), ()>>) {
+    pub(crate) fn start_prepare_spawn(&mut self, uuid: u128, name: &str, started_by: StartedBy, reply: oneshot::Sender<Started>) {
         let started = crate::util::catch_exception(|| {
             let _collector = tag_value_input::ScopedCollector::new_empty(PREPARE_SPAWN_TASK_LOGGER);
             let saved = self.load_player_data(name, uuid);
@@ -137,11 +146,20 @@ impl Server {
         });
         match started {
             Ok((level, position, spawn_finder, y_rot, x_rot)) => {
-                self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, spawn_finder, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_future: None })
+                self.prepare_spawn_tasks.push(PrepareSpawnTask {
+                    uuid,
+                    level,
+                    position,
+                    spawn_finder,
+                    angle: (y_rot, x_rot),
+                    reply: Some(reply),
+                    chunk_load_future: None,
+                    ticked_after_failing: false,
+                })
             }
             Err(exception) => {
                 error!("Failed to start configuration task {}\n{exception}", PrepareSpawnTask::TYPE);
-                let _ = reply.send(Err(()));
+                let _ = reply.send(Err(Disconnection::Handled));
             }
         }
     }
@@ -165,10 +183,13 @@ impl Server {
                     index += 1;
                     continue;
                 }
-                match self.spawn_finders.remove(&finder).and_then(PlayerSpawnFinder::into_finished) {
-                    Some(Finished::Spawn(position)) => self.prepare_spawn_tasks[index].position = Some(position),
+                let failed_inline = self.spawn_finders.get(&finder).is_some_and(PlayerSpawnFinder::failed_inline);
+                match self.spawn_finders.get(&finder).and_then(PlayerSpawnFinder::finished) {
+                    Some(&Finished::Spawn(position)) => {
+                        self.spawn_finders.remove(&finder);
+                        self.prepare_spawn_tasks[index].position = Some(position);
+                    }
                     Some(Finished::Failed(reported)) => {
-                        let task = self.prepare_spawn_tasks.swap_remove(index);
                         let mut frames = PREPARING_TICK_JOIN.to_vec();
                         if paused {
                             frames.push(TICK_SERVER_PAUSED_CONNECTION);
@@ -177,10 +198,19 @@ impl Server {
                             frames.push(TICK_CHILDREN_CONNECTION);
                             frames.extend(TICK_LOOP);
                         }
-                        let exception = completion_exception(&reported, frames);
+                        let exception = completion_exception(reported, frames);
                         error!("Failed to tick configuration task {}\n{}", PrepareSpawnTask::TYPE, exception.print_stack_trace().trim_end());
+                        let task = &mut self.prepare_spawn_tasks[index];
+                        if failed_inline && !task.ticked_after_failing {
+                            task.ticked_after_failing = true;
+                            index += 1;
+                            continue;
+                        }
+                        self.spawn_finders.remove(&finder);
+                        let task = self.prepare_spawn_tasks.swap_remove(index);
+                        let disconnection = if task.ticked_after_failing { Disconnection::HandledTwice } else { Disconnection::Handled };
                         if let Some(reply) = task.reply {
-                            let _ = reply.send(Err(()));
+                            let _ = reply.send(Err(disconnection));
                         }
                     }
                     Some(Finished::Cancelled) | None => unreachable!("a closed task is removed before its spawn search is cancelled"),

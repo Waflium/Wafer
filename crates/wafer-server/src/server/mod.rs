@@ -215,7 +215,7 @@ pub enum Event {
     Left { conn: ConnId, reason: Component },
     Console(String, bool),
     Verify { profile: Profile, address: std::net::SocketAddr, user_name: String, reply: tokio::sync::oneshot::Sender<Verdict> },
-    PrepareSpawn { uuid: u128, name: String, started_by: network::prepare_spawn_task::StartedBy, reply: tokio::sync::oneshot::Sender<Result<(), ()>> },
+    PrepareSpawn { uuid: u128, name: String, started_by: network::prepare_spawn_task::StartedBy, reply: tokio::sync::oneshot::Sender<network::prepare_spawn_task::Started> },
     PrepareSpawnClosed { uuid: u128 },
     Halt,
     Rcon { command: String, reply: tokio::sync::oneshot::Sender<String> },
