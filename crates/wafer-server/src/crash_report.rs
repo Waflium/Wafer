@@ -226,8 +226,8 @@ const ON_THREAD_EXCEPTION_FRAMES: [&str; 2] = [
     "java.base/java.lang.Thread.dispatchUncaughtException(Thread.java:2556)",
 ];
 
-pub fn on_thread_exception(thread_name: &str, thread_id: u32, throwable: &JavaThrowable) {
-    error!(thread: thread_name, "Caught exception in thread Thread[#{thread_id},{thread_name},5,main]\n{}", throwable.print_stack_trace().trim_end());
+pub fn on_thread_exception(thread_name: &str, thread_id: u32, priority: u32, throwable: &JavaThrowable) {
+    error!(thread: thread_name, "Caught exception in thread Thread[#{thread_id},{thread_name},{priority},main]\n{}", throwable.print_stack_trace().trim_end());
     let mut report = {
         let _creator = java_stack::enter_all(&[ON_THREAD_EXCEPTION_CREATE_FRAME, ON_THREAD_EXCEPTION_FRAMES[1]]);
         CrashReport::for_throwable(throwable, "Exception on worker thread")

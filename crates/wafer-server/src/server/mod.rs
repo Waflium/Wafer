@@ -1188,6 +1188,7 @@ impl Server {
 
     pub fn halt(&mut self) {
         self.stopping = true;
+        dedicated::set_stopped_or_not_running();
     }
 
     pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S], invoker: &[&'static str]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
@@ -1241,13 +1242,14 @@ impl Server {
                 level.chunks.deactivate_tickets_on_closing();
                 level.tick_chunk_source_without_chunks();
             }
+            let _scope = main_thread_frames::enter_absolute([STOP_SERVER_FRAMES[2], STOP_SERVER_FRAMES[3], STOP_SERVER_FRAMES[4]]);
             self.wait_until_next_tick();
         }
         self.save_all_chunks(false, true, false);
         for level in &mut self.levels {
             level.close();
         }
-        crate::util::io_pool().await_tasks(Duration::from_secs(3));
+        crate::util::io_pool().shutdown_and_await(Duration::from_secs(3));
     }
 
     pub fn modify_clock(&mut self, clock: usize) {
@@ -2604,10 +2606,14 @@ pub fn run(
     } else {
         timing.stop();
     }
+    dedicated::set_stopped_or_not_running();
     let stop_failed = if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| server.stop_server())) {
         match panic.downcast::<crate::crash_report::JavaException>() {
             Ok(exception) => error!("Exception stopping the server\n{}", exception.0.print_stack_trace().trim_end()),
-            Err(_) => error!("Exception stopping the server"),
+            Err(panic) => match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => error!("Exception stopping the server\n{}", reported.0.reported_exception().print_stack_trace().trim_end()),
+                Err(_) => error!("Exception stopping the server"),
+            },
         }
         true
     } else {
@@ -2615,6 +2621,8 @@ pub fn run(
     };
     if !(crashed && stop_failed) {
         timing.stop();
+    } else if let Ok(mut snapshot) = timing.snapshot.lock() {
+        *snapshot = server.watchdog_snapshot();
     }
     if let Some(rcon_thread) = rcon_thread {
         rcon_thread.stop();
@@ -2629,6 +2637,7 @@ pub fn run(
     if stop_failed {
         dedicated::server_watchdog::linger();
     }
+    crate::util::io_pool().await_exit();
     Ok(())
 }
 

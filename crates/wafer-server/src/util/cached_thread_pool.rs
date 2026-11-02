@@ -1,6 +1,6 @@
 use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 type Task = Box<dyn FnOnce() + Send>;
@@ -38,21 +38,28 @@ fn current_priority() -> u32 {
     }
 }
 
+enum Slot {
+    Empty,
+    Task(Task),
+    Interrupted,
+}
+
 struct Waiter {
-    task: Mutex<Option<Task>>,
+    slot: Mutex<Slot>,
     handed: Condvar,
 }
 
 struct State {
     waiting: Vec<Arc<Waiter>>,
-    running: usize,
+    workers: usize,
+    shutdown: bool,
     live: Vec<(String, u32, u32)>,
 }
 
 struct Shared {
     next_name: Box<dyn Fn() -> String + Send + Sync>,
     state: Mutex<State>,
-    finished: Condvar,
+    changed: Condvar,
 }
 
 #[derive(Clone)]
@@ -67,42 +74,39 @@ impl CachedThreadPool {
     }
 
     pub fn with_names(next_name: impl Fn() -> String + Send + Sync + 'static) -> CachedThreadPool {
-        let state = Mutex::new(State { waiting: Vec::new(), running: 0, live: Vec::new() });
-        CachedThreadPool { shared: Arc::new(Shared { next_name: Box::new(next_name), state, finished: Condvar::new() }) }
+        let state = Mutex::new(State { waiting: Vec::new(), workers: 0, shutdown: false, live: Vec::new() });
+        CachedThreadPool { shared: Arc::new(Shared { next_name: Box::new(next_name), state, changed: Condvar::new() }) }
     }
 
     pub fn execute(&self, task: impl FnOnce() + Send + 'static) {
         let mut state = self.shared.state.lock().unwrap();
-        state.running += 1;
         if let Some(waiter) = state.waiting.pop() {
             drop(state);
-            *waiter.task.lock().unwrap() = Some(Box::new(task));
+            *waiter.slot.lock().unwrap() = Slot::Task(Box::new(task));
             waiter.handed.notify_one();
             return;
         }
-        let name = (self.shared.next_name)();
-        let priority = current_priority();
-        let java_thread_id = super::next_java_thread_id();
-        state.live.push((name.clone(), priority, java_thread_id));
-        drop(state);
-        let shared = self.shared.clone();
-        let thread_name = name.clone();
-        std::thread::Builder::new()
-            .name(name)
-            .spawn(move || {
-                PRIORITY.set(priority);
-                JAVA_THREAD_ID.set(java_thread_id);
-                run_worker(shared, thread_name, Box::new(task))
-            })
-            .expect("worker thread");
+        add_worker(&self.shared, &mut state, Some(Box::new(task)));
     }
 
-    pub fn await_tasks(&self, timeout: Duration) {
+    pub fn shutdown_and_await(&self, timeout: Duration) {
         let deadline = Instant::now() + timeout;
         let mut state = self.shared.state.lock().unwrap();
-        while state.running > 0 {
+        state.shutdown = true;
+        for waiter in std::mem::take(&mut state.waiting) {
+            *waiter.slot.lock().unwrap() = Slot::Interrupted;
+            waiter.handed.notify_one();
+        }
+        while state.workers > 0 {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else { return };
-            state = self.shared.finished.wait_timeout(state, left).unwrap().0;
+            state = self.shared.changed.wait_timeout(state, left).unwrap().0;
+        }
+    }
+
+    pub fn await_exit(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+        while !state.live.is_empty() {
+            state = self.shared.changed.wait(state).unwrap();
         }
     }
 
@@ -111,58 +115,96 @@ impl CachedThreadPool {
     }
 }
 
+fn add_worker(shared: &Arc<Shared>, state: &mut MutexGuard<State>, first: Option<Task>) {
+    let name = (shared.next_name)();
+    let priority = current_priority();
+    let java_thread_id = super::next_java_thread_id();
+    state.workers += 1;
+    state.live.push((name.clone(), priority, java_thread_id));
+    let shared = shared.clone();
+    let thread_name = name.clone();
+    std::thread::Builder::new()
+        .name(name)
+        .spawn(move || {
+            PRIORITY.set(priority);
+            JAVA_THREAD_ID.set(java_thread_id);
+            run_worker(shared, thread_name, first)
+        })
+        .expect("worker thread");
+}
+
+fn process_worker_exit(shared: &Shared, state: &mut State) {
+    state.workers -= 1;
+    shared.changed.notify_all();
+}
+
 fn exit(shared: &Shared, name: &str) {
     let mut state = shared.state.lock().unwrap();
     if let Some(index) = state.live.iter().position(|(live, _, _)| live == name) {
         state.live.remove(index);
     }
+    shared.changed.notify_all();
 }
 
-fn run(shared: &Shared, name: &str, task: Task) {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(task));
-    let mut state = shared.state.lock().unwrap();
-    state.running -= 1;
-    if state.running == 0 {
-        shared.finished.notify_all();
-    }
-    drop(state);
-    if let Err(payload) = result {
-        exit(shared, name);
-        std::panic::resume_unwind(payload);
-    }
-}
-
-fn run_worker(shared: Arc<Shared>, name: String, first: Task) {
-    run(&shared, &name, first);
-    let waiter = Arc::new(Waiter { task: Mutex::new(None), handed: Condvar::new() });
+fn run_worker(shared: Arc<Shared>, name: String, first: Option<Task>) {
+    let waiter = Arc::new(Waiter { slot: Mutex::new(Slot::Empty), handed: Condvar::new() });
+    let mut task = first;
     loop {
-        shared.state.lock().unwrap().waiting.push(waiter.clone());
-        let task = waiter.task.lock().unwrap();
-        let (mut task, timeout) = waiter.handed.wait_timeout_while(task, KEEP_ALIVE, |task| task.is_none()).unwrap();
-        let next = match task.take() {
-            Some(next) => next,
-            None if timeout.timed_out() => {
-                drop(task);
+        let current = match task.take() {
+            Some(current) => current,
+            None => match get_task(&shared, &waiter) {
+                Some(next) => next,
+                None => break,
+            },
+        };
+        if let Err(throwable) = crate::util::catch_throwable(current) {
+            {
                 let mut state = shared.state.lock().unwrap();
-                match state.waiting.iter().position(|waiting| Arc::ptr_eq(waiting, &waiter)) {
-                    Some(index) => {
-                        state.waiting.remove(index);
-                        if let Some(index) = state.live.iter().position(|(live, _, _)| *live == name) {
-                            state.live.remove(index);
-                        }
-                        return;
-                    }
-                    None => {
-                        drop(state);
-                        let task = waiter.task.lock().unwrap();
-                        let mut task = waiter.handed.wait_while(task, |task| task.is_none()).unwrap();
-                        task.take().expect("a handed task")
-                    }
+                process_worker_exit(&shared, &mut state);
+                if !state.shutdown {
+                    add_worker(&shared, &mut state, None);
                 }
             }
-            None => continue,
-        };
-        run(&shared, &name, next);
+            crate::crash_report::on_thread_exception(&name, JAVA_THREAD_ID.get(), PRIORITY.get(), &throwable);
+            exit(&shared, &name);
+            return;
+        }
+    }
+    process_worker_exit(&shared, &mut shared.state.lock().unwrap());
+    exit(&shared, &name);
+}
+
+fn get_task(shared: &Shared, waiter: &Arc<Waiter>) -> Option<Task> {
+    {
+        let mut state = shared.state.lock().unwrap();
+        if state.shutdown {
+            return None;
+        }
+        state.waiting.push(waiter.clone());
+    }
+    let slot = waiter.slot.lock().unwrap();
+    let (mut slot, timeout) = waiter.handed.wait_timeout_while(slot, KEEP_ALIVE, |slot| matches!(slot, Slot::Empty)).unwrap();
+    match std::mem::replace(&mut *slot, Slot::Empty) {
+        Slot::Task(next) => return Some(next),
+        Slot::Interrupted => return None,
+        Slot::Empty => debug_assert!(timeout.timed_out()),
+    }
+    drop(slot);
+    let mut state = shared.state.lock().unwrap();
+    match state.waiting.iter().position(|waiting| Arc::ptr_eq(waiting, waiter)) {
+        Some(index) => {
+            state.waiting.remove(index);
+            None
+        }
+        None => {
+            drop(state);
+            let slot = waiter.slot.lock().unwrap();
+            let mut slot = waiter.handed.wait_while(slot, |slot| matches!(slot, Slot::Empty)).unwrap();
+            match std::mem::replace(&mut *slot, Slot::Empty) {
+                Slot::Task(next) => Some(next),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -203,10 +245,12 @@ mod tests {
         idle_after(&pool, release_first);
         let (third, release_third) = blocking_task(&names);
         pool.execute(third);
-        release_third.send(()).unwrap();
-        pool.await_tasks(Duration::from_secs(5));
+        idle_after(&pool, release_third);
         assert_eq!(*names.lock().unwrap(), ["T-1", "T-2", "T-1"]);
         let live: Vec<(String, u32)> = pool.live_threads().into_iter().map(|(name, priority, _)| (name, priority)).collect();
         assert_eq!(live, [("T-1".to_string(), 5), ("T-2".to_string(), 5)]);
+        pool.shutdown_and_await(Duration::from_secs(5));
+        pool.await_exit();
+        assert!(pool.live_threads().is_empty());
     }
 }

@@ -33,11 +33,6 @@ pub fn is_unregistered_holder(throwable: &JavaThrowable) -> bool {
     throwable.description.starts_with(serialization::UNREGISTERED_HOLDER_MESSAGE)
 }
 
-pub fn report_unregistered_holder(throwable: &JavaThrowable) {
-    let name = next_io_worker_name();
-    crate::crash_report::on_thread_exception(&name, crate::util::next_java_thread_id(), throwable);
-}
-
 pub fn live_io_workers() -> Vec<(usize, u32, u32)> {
     let mut workers: Vec<(usize, u32, u32)> =
         crate::util::io_pool().live_threads().iter().filter_map(|(name, priority, id)| Some((name.rsplit('-').next()?.parse().ok()?, *priority, *id))).collect();
@@ -148,7 +143,7 @@ enum IoRequest {
     Read { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<Option<Nbt>>) + Send> },
     ScanStructures { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<Option<Nbt>>) + Send> },
     ScanOldData { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<bool>) + Send> },
-    Write { pos: ChunkPos, nbt: Nbt },
+    Write { pos: ChunkPos, nbt: Result<Nbt, JavaThrowable> },
     Clear { pos: ChunkPos },
     WriteChunk(Box<ChunkToSave>),
     Flush { flush: bool, reply: Sender<io::Result<()>> },
@@ -178,17 +173,22 @@ fn register_for_execution(shared: &Arc<IoShared>, queue: &mut IoQueue) {
 
 fn run_io_worker(shared: Arc<IoShared>) {
     let request = shared.queue.lock().unwrap().requests.pop_front();
-    if let Some(request) = request {
+    let thrown = request.and_then(|request| {
         shared.queued_requests.fetch_sub(1, Ordering::Relaxed);
         let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
-        process_io_request(&shared, request);
+        process_io_request(&shared, request)
+    });
+    {
+        let mut queue = shared.queue.lock().unwrap();
+        queue.running = false;
+        register_for_execution(&shared, &mut queue);
     }
-    let mut queue = shared.queue.lock().unwrap();
-    queue.running = false;
-    register_for_execution(&shared, &mut queue);
+    if let Some(throwable) = thrown {
+        crate::crash_report::throw_java_exception(throwable);
+    }
 }
 
-fn process_io_request(shared: &IoShared, request: IoRequest) {
+fn process_io_request(shared: &IoShared, request: IoRequest) -> Option<JavaThrowable> {
     let active = &shared.active_chunk_writes;
     let mut storage = shared.storage.lock().unwrap();
     let storage = &mut *storage;
@@ -196,10 +196,8 @@ fn process_io_request(shared: &IoShared, request: IoRequest) {
     match request {
         IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
             Err(e) if storage_exception::is_java_error(&e) => {
-                let thread = thread::current();
-                let name = thread.name().unwrap_or_default();
-                crate::crash_report::on_thread_exception(name, crate::util::cached_thread_pool::current_java_thread_id(), &storage_exception::on_load_worker_uncaught(&e));
                 std::mem::forget(reply);
+                return Some(storage_exception::on_load_worker_uncaught(&e));
             }
             result => reply(result.map_err(|e| {
                 let mut failure = storage_exception::on_load_worker(&e);
@@ -219,6 +217,10 @@ fn process_io_request(shared: &IoShared, request: IoRequest) {
             io::Error::new(e.kind(), failure)
         })),
         IoRequest::Write { pos, nbt } => {
+            let nbt = match nbt {
+                Ok(nbt) => nbt,
+                Err(throwable) => return Some(throwable),
+            };
             write(storage, pos, &nbt, reporting.as_ref());
             active.fetch_sub(1, Ordering::Relaxed);
         }
@@ -231,13 +233,14 @@ fn process_io_request(shared: &IoShared, request: IoRequest) {
             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
             match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
                 Ok(nbt) => write(storage, chunk.pos, &nbt, reporting.as_ref()),
-                Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => report_unregistered_holder(&JavaThrowable::from_io_error(&e)),
+                Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => return Some(JavaThrowable::from_io_error(&e)),
                 Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
             }
             active.fetch_sub(1, Ordering::Relaxed);
         }
         IoRequest::Flush { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
     }
+    None
 }
 
 #[derive(Clone)]
@@ -294,6 +297,10 @@ impl IoWorker {
     }
 
     pub fn write(&self, pos: ChunkPos, nbt: Nbt) {
+        self.store(pos, Ok(nbt));
+    }
+
+    pub fn store(&self, pos: ChunkPos, nbt: Result<Nbt, JavaThrowable>) {
         self.active_chunk_writes.fetch_add(1, Ordering::Relaxed);
         let _ = self.submit(IoRequest::Write { pos, nbt });
     }

@@ -2491,7 +2491,7 @@ impl ChunkCache {
         let fluid_ticks = self.fluid_ticks.pack(pos, self.game_time);
         match crate::util::catch_throwable(|| serialization::write(&self.chunks[&pos], ChunkStatus::Full, block_entities, self.game_time, &block_ticks, &fluid_ticks, &light)) {
             Ok(nbt) => self.io.as_ref().unwrap().write(pos, nbt),
-            Err(throwable) if super::chunk_workers::is_unregistered_holder(&throwable) => super::chunk_workers::report_unregistered_holder(&throwable),
+            Err(throwable) if super::chunk_workers::is_unregistered_holder(&throwable) => self.io.as_ref().unwrap().store(pos, Err(throwable)),
             Err(throwable) => crate::crash_report::throw_java_exception(throwable),
         }
         self.chunks.get_mut(&pos).unwrap().unsaved = false;

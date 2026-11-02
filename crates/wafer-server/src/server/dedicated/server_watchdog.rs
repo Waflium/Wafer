@@ -55,13 +55,14 @@ impl ServerTiming {
     }
 }
 
-static LINGERING: AtomicBool = AtomicBool::new(false);
+static SERVER_THREAD_TERMINATED: AtomicBool = AtomicBool::new(false);
 
 pub fn linger() -> ! {
-    LINGERING.store(true, Ordering::Relaxed);
-    std::thread::sleep(Duration::from_secs(61));
+    SERVER_THREAD_TERMINATED.store(true, Ordering::Release);
+    super::server_stopped();
+    crate::util::io_pool().await_exit();
     crate::logging::flush();
-    std::process::exit(0)
+    std::process::exit(super::exit_status())
 }
 
 static WATCHDOG_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -95,15 +96,15 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
         crate::util::java_format_fixed((milliseconds_per_tick / 1000.0) as f64, 2)
     );
     error!("Considering it to be crashed, server will forcibly shutdown.");
-    if LINGERING.load(Ordering::Relaxed) {
-        crate::logging::flush();
-        std::process::exit(0);
-    }
     let snapshot = timing.snapshot.lock().map(|s| s.clone()).unwrap_or_default();
     let mut report = create_watchdog_crash_report("Watching Server");
     fill_system_report(&mut report, &snapshot);
-    report
-        .add_category("Performance stats")
+    let performance_stats = if SERVER_THREAD_TERMINATED.load(Ordering::Acquire) {
+        report.add_category_with_stack_trace("Performance stats", vec![WATCHDOG_RUN_FRAME.to_string(), THREAD_RUN_FRAME.to_string()])
+    } else {
+        report.add_category("Performance stats")
+    };
+    performance_stats
         .set_detail("Random tick rate", snapshot.random_tick_rate.clone())
         .set_detail("Level stats", snapshot.level_stats.clone());
     print!("Crash report:\n{}\n", report.get_friendly_report(&ReportType::CRASH));
@@ -123,6 +124,7 @@ const WATCHDOG_THREAD_FRAMES: [&str; 3] = [
 ];
 
 const CREATE_WATCHDOG_CRASH_REPORT_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:94)";
+const WATCHDOG_ERROR_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:83)";
 const WATCHDOG_RUN_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)";
 
 const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
@@ -658,6 +660,12 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
         ),
         console_handler_thread(),
     ];
+    if super::console_thread_terminated() {
+        entries.pop();
+    }
+    if SERVER_THREAD_TERMINATED.load(Ordering::Acquire) {
+        entries.remove(0);
+    }
     entries.extend(netty_io_threads());
     entries.extend(jvm_threads());
     if crate::server::services::discovery_executor_blocked() {
@@ -797,7 +805,11 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
 
 pub fn create_watchdog_crash_report(message: &str) -> CrashReport {
     let server_frames = crate::server::main_thread_frames::published();
-    let frames: Vec<&'static str> = thread_info_frames(&server_frames).iter().map(|frame| &*Box::leak(runtime_frame(frame).into_boxed_str())).collect();
+    let frames: Vec<&'static str> = if SERVER_THREAD_TERMINATED.load(Ordering::Acquire) {
+        vec![WATCHDOG_ERROR_FRAME, WATCHDOG_RUN_FRAME, THREAD_RUN_FRAME]
+    } else {
+        thread_info_frames(&server_frames).iter().map(|frame| &*Box::leak(runtime_frame(frame).into_boxed_str())).collect()
+    };
     let exception = crate::util::java_throwable::JavaThrowable::new(format!("java.lang.Error: Watchdog ({message})"), frames);
     let mut report = {
         let _creator = crate::util::java_stack::enter_all(&[CREATE_WATCHDOG_CRASH_REPORT_FRAME, WATCHDOG_RUN_FRAME, THREAD_RUN_FRAME]);

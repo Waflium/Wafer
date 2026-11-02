@@ -163,27 +163,39 @@ pub fn set_overworld_created() {
     OVERWORLD_CREATED.store(true, std::sync::atomic::Ordering::Release);
 }
 
+static STOPPED_OR_NOT_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CONSOLE_THREAD_TERMINATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_stopped_or_not_running() {
+    STOPPED_OR_NOT_RUNNING.store(true, std::sync::atomic::Ordering::Release);
+}
+
+pub fn console_thread_terminated() -> bool {
+    CONSOLE_THREAD_TERMINATED.load(std::sync::atomic::Ordering::Acquire)
+}
+
 pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     let _ = std::thread::Builder::new().name("Server console handler".into()).spawn(move || {
         let stdin = io::stdin();
         let mut line = String::new();
-        loop {
+        while !STOPPED_OR_NOT_RUNNING.load(std::sync::atomic::Ordering::Acquire) {
             line.clear();
             match stdin.lock().read_line(&mut line) {
-                Ok(0) => return,
+                Ok(0) => break,
                 Ok(_) => {
                     let command = line.trim_end_matches(['\n', '\r']).to_string();
                     let has_level = OVERWORLD_CREATED.load(std::sync::atomic::Ordering::Acquire);
                     if events.send(Event::Console(command, has_level)).is_err() {
-                        return;
+                        break;
                     }
                 }
                 Err(_) => {
                     error!("Exception handling console input");
-                    return;
+                    break;
                 }
             }
         }
+        CONSOLE_THREAD_TERMINATED.store(true, std::sync::atomic::Ordering::Release);
     });
 }
 

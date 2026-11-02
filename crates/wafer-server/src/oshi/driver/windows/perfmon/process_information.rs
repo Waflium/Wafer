@@ -16,6 +16,9 @@ const PROCESS_PERFORMANCE_WMI_PROPERTIES: [&str; 9] =
     ["NAME", "PRIORITYBASE", "ELAPSEDTIME", "IDPROCESS", "CREATINGPROCESSID", "IOREADBYTESPERSEC", "IOWRITEBYTESPERSEC", "PRIVATEBYTES", "PAGEFAULTSPERSEC"];
 
 pub fn query_process_counters() -> InstancesAndValues {
+    if super::perfmon_disabled::perf_proc_disabled() {
+        return InstancesAndValues { instances: Vec::new(), values: Vec::new() };
+    }
     query_instances_and_values(
         &WildcardProperties { counters: &PROCESS_PERFORMANCE_COUNTERS, wmi_properties: &PROCESS_PERFORMANCE_WMI_PROPERTIES },
         "Process",
