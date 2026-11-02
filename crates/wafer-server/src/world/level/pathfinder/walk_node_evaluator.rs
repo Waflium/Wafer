@@ -7,10 +7,12 @@ use super::amphibious_node_evaluator::AmphibiousNodeEvaluator;
 use super::node::Node;
 use super::node_evaluator::{NodeEvaluator, is_burning_block};
 use super::path_type::PathType;
-use super::pathfinding_context::PathfindingContext;
+use super::pathfinding_context::{LevelPathfindingContext, PathTypeGetter, PathfindingContext};
 use super::target::Target;
+use crate::server::level::ServerLevel;
 use crate::world::entity::animal::frog::frog::FrogNodeEvaluator;
 use crate::world::entity::mob::Mob;
+use crate::world::level::BlockGetter;
 use crate::world::level::block::door_block;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 
@@ -525,7 +527,7 @@ impl WalkNodeEvaluator {
         if self.home && context.level().level.creaking_home_node_evaluator_blocks(self.node_evaluator.mob, context.mob_position(), x, y, z) {
             return PathType::Blocked;
         }
-        get_path_type_static(context, x, y, z)
+        get_path_type_static(&mut &*context, x, y, z)
     }
 }
 
@@ -539,9 +541,13 @@ pub fn get_floor_level(level: &PathNavigationRegion, pos: BlockPos) -> f64 {
     target.y as f64 + if shape.is_empty() { 0.0 } else { shape.max(Axis::Y) }
 }
 
-pub fn get_path_type_static(context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+pub fn get_path_type_static_for_mob(level: &mut ServerLevel, pos: BlockPos) -> PathType {
+    get_path_type_static(&mut LevelPathfindingContext::new(level), pos.x, pos.y, pos.z)
+}
+
+pub fn get_path_type_static(context: &mut impl PathTypeGetter, x: i32, y: i32, z: i32) -> PathType {
     let block_path_type = context.get_path_type_from_state(x, y, z);
-    if block_path_type == PathType::Open && y >= context.level().get_min_y() + 1 {
+    if block_path_type == PathType::Open && y >= context.get_min_y() + 1 {
         match context.get_path_type_from_state(x, y - 1, z) {
             PathType::Open | PathType::Water | PathType::Lava | PathType::Walkable => PathType::Open,
             PathType::Fire => PathType::Fire,
@@ -557,7 +563,7 @@ pub fn get_path_type_static(context: &PathfindingContext, x: i32, y: i32, z: i32
     }
 }
 
-pub fn check_neighbour_blocks(context: &PathfindingContext, x: i32, y: i32, z: i32, block_path_type: PathType) -> PathType {
+pub fn check_neighbour_blocks(context: &mut impl PathTypeGetter, x: i32, y: i32, z: i32, block_path_type: PathType) -> PathType {
     for dx in -1..=1 {
         for dy in -1..=1 {
             for dz in -1..=1 {
@@ -582,8 +588,8 @@ pub fn check_neighbour_blocks(context: &PathfindingContext, x: i32, y: i32, z: i
     block_path_type
 }
 
-pub fn get_path_type_from_state(level: &PathNavigationRegion, pos: BlockPos) -> PathType {
-    let block_state = level.get_block_state(pos);
+pub fn get_path_type_from_state(level: &mut impl BlockGetter, pos: BlockPos) -> PathType {
+    let block_state = level.block_state(pos);
     let block = block_state.block();
     if block_state.is_air() {
         return PathType::Open;

@@ -130,6 +130,37 @@ fn a_path_navigation_snapshot_counts_one_get_chunk_now_per_chunk_and_reads_for_f
 }
 
 #[test]
+fn a_path_navigation_snapshot_collides_with_its_own_chunks_only() {
+    use crate::world::level::path_navigation_region::PathNavigationRegion;
+    let mut level = level();
+    let id = level.spawn_entity_type("minecraft:pig", BlockPos::new(3, -60, 3), EntitySpawnReason::Command).unwrap();
+    let region = PathNavigationRegion::snapshot(&level, BlockPos::new(-20, -61, -20), BlockPos::new(20, -50, 20));
+    let in_ground = AABB::new(3.2, -61.5, 3.2, 3.8, -60.5, 3.8);
+    let counted = counters(|| {
+        assert!(!region.no_collision(id, &in_ground));
+        assert!(region.no_collision(id, &in_ground.move_by(0.0, 2.0, 0.0)));
+    });
+    assert_eq!(count(&counted, "getChunk"), 0);
+    let outside = PathNavigationRegion::snapshot(&level, BlockPos::new(-20, -61, -20), BlockPos::new(-1, -50, -1));
+    assert!(outside.no_collision(id, &in_ground));
+    assert_eq!(outside.get_block_state(BlockPos::new(3, -61, 3)), blocks::VOID_AIR.default_state());
+}
+
+#[test]
+fn a_mob_path_type_loads_the_chunk_it_reads_like_level_get_block_state() {
+    use crate::world::level::pathfinder::path_type::PathType;
+    use crate::world::level::pathfinder::walk_node_evaluator::get_path_type_static_for_mob;
+    let mut level = level();
+    let pos = BlockPos::new(200, -60, 200);
+    assert!(level.chunks.loaded_chunk(pos.chunk()).is_none());
+    let counted = counters(|| {
+        assert_eq!(get_path_type_static_for_mob(&mut level, pos), PathType::Walkable);
+    });
+    assert!(level.chunks.loaded_chunk(pos.chunk()).is_some());
+    assert!(count(&counted, "getChunkCacheMiss") >= 1);
+}
+
+#[test]
 fn reading_above_the_build_height_does_not_look_up_a_chunk() {
     let mut level = level();
     let counted = counters(|| {

@@ -235,7 +235,7 @@ impl WalkNodeEvaluator {
             };
         }
         if block_path_type == PathType::Walkable || block_path_type == PathType::Open {
-            block_path_type = check_neighbour_blocks(context, x, y, z, block_path_type);
+            block_path_type = check_neighbour_blocks(&mut &*context, x, y, z, block_path_type);
         }
         block_path_type
     }

@@ -32,7 +32,7 @@ pub fn is_water(level: &ServerLevel, pos: BlockPos) -> bool {
 
 pub fn has_malus(level: &ServerLevel, mob: EntityId, pos: BlockPos) -> bool {
     let context = PathfindingContext::new(PathNavigationRegion::new(level), mob);
-    level.mob(mob).expect("a mob").get_pathfinding_malus(get_path_type_static(&context, pos.x, pos.y, pos.z)) != 0.0
+    level.mob(mob).expect("a mob").get_pathfinding_malus(get_path_type_static(&mut &context, pos.x, pos.y, pos.z)) != 0.0
 }
 
 pub fn is_solid(level: &ServerLevel, pos: BlockPos) -> bool {

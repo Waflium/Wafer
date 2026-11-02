@@ -30,9 +30,8 @@ use crate::world::entity::schedule::Activity;
 use crate::world::entity::{EntityId, entity_types};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
-use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
-use crate::world::level::pathfinder::pathfinding_context::PathfindingContext;
+use crate::world::level::pathfinder::pathfinding_context::LevelPathfindingContext;
 use crate::world::level::pathfinder::walk_node_evaluator::get_path_type_static;
 
 const SPEED_MULTIPLIER_WHEN_PANICKING: f32 = 2.0;
@@ -198,8 +197,8 @@ fn is_acceptable_landing_spot(level: &mut ServerLevel, body: EntityId, target_po
         let bs_below = level.block_state(below);
         if !bs.is(&block_tags::FROG_PREFER_JUMP_TO) && !bs_below.is(&block_tags::FROG_PREFER_JUMP_TO) {
             let (path_type, path_type_below) = {
-                let context = PathfindingContext::new(PathNavigationRegion::new(level), body);
-                (get_path_type_static(&context, target_pos.x, target_pos.y, target_pos.z), get_path_type_static(&context, below.x, below.y, below.z))
+                let mut context = LevelPathfindingContext::new(level);
+                (get_path_type_static(&mut context, target_pos.x, target_pos.y, target_pos.z), get_path_type_static(&mut context, below.x, below.y, below.z))
             };
             if path_type != PathType::Trapdoor && (!bs.is_air() || path_type_below != PathType::Trapdoor) {
                 long_jump_to_random_pos::default_acceptable_landing_spot(level, body, target_pos)

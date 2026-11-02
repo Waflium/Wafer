@@ -4,6 +4,7 @@ use wafer_data::properties::{EXTENDED, FACING};
 use wafer_data::BlockState;
 
 use super::entity::BlockEntityKind;
+use super::entity::piston_moving_block_entity::PistonMovingBlockEntity;
 use super::{BlockBehaviour, BlockHitResult};
 use super::mirror::Mirror;
 use super::rotation::Rotation;
@@ -83,6 +84,10 @@ pub fn get_collision_shape(level: &ServerLevel, pos: BlockPos) -> VoxelShape {
     let Some(BlockEntityKind::PistonMoving(entity)) = level.chunks.loaded_chunk(pos.chunk()).and_then(|chunk| chunk.block_entities.map.get(&pos)).map(|entity| &entity.kind) else {
         return VoxelShape::empty();
     };
+    get_collision_shape_of(entity, pos)
+}
+
+pub fn get_collision_shape_of(entity: &PistonMovingBlockEntity, pos: BlockPos) -> VoxelShape {
     let mut shape = VoxelShape::empty();
     for (part, offset) in entity.collision_shapes(pos).into_iter().flatten() {
         shape = shapes::join_unoptimized(&shape, &part.moved(offset[0], offset[1], offset[2]), BooleanOp::Or);

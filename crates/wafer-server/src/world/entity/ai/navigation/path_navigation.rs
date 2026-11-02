@@ -5,6 +5,7 @@ use crate::server::level::ServerLevel;
 use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
+use crate::world::level::BlockGetter;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
@@ -492,13 +493,12 @@ impl PathNavigation {
         self.path = None;
     }
 
-    pub fn path_navigation_trim_path(&mut self, level: &ServerLevel) {
+    pub fn path_navigation_trim_path(&mut self, level: &mut ServerLevel) {
         let Some(path) = &mut self.path else { return };
-        let region = PathNavigationRegion::new(level);
         for i in 0..path.get_node_count() {
             let node = path.get_node(i);
             let next_node = (i + 1 < path.get_node_count()).then(|| path.get_node(i + 1));
-            let state = region.get_block_state(BlockPos::new(node.x, node.y, node.z));
+            let state = level.block_state(BlockPos::new(node.x, node.y, node.z));
             if state.is(&block_tags::CAULDRONS) {
                 path.replace_node(i, node.clone_and_move(node.x, node.y + 1, node.z));
                 if let Some(next_node) = next_node

@@ -17,9 +17,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::values::FoodProperties;
 use crate::world::level::BlockGetter;
-use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
-use crate::world::level::pathfinder::pathfinding_context::PathfindingContext;
 use crate::world::level::pathfinder::walk_node_evaluator;
 use crate::world::scores::player_team::PlayerTeam;
 use crate::world::InteractionHand;
@@ -279,7 +277,7 @@ impl ServerLevel {
     }
 
     fn can_teleport_to(&mut self, id: EntityId, pos: BlockPos) -> bool {
-        let path_type = walk_node_evaluator::get_path_type_static(&PathfindingContext::new(PathNavigationRegion::new(self), id), pos.x, pos.y, pos.z);
+        let path_type = walk_node_evaluator::get_path_type_static_for_mob(self, pos);
         if path_type != PathType::Walkable {
             return false;
         }

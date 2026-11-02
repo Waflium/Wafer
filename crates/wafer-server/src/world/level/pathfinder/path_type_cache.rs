@@ -3,7 +3,7 @@ use wafer_core::fastutil::mix;
 
 use super::path_type::PathType;
 use super::walk_node_evaluator::get_path_type_from_state;
-use crate::world::level::path_navigation_region::PathNavigationRegion;
+use crate::world::level::BlockGetter;
 
 const SIZE: usize = 4096;
 const MASK: i64 = 4095;
@@ -20,7 +20,7 @@ impl Default for PathTypeCache {
 }
 
 impl PathTypeCache {
-    pub fn get_or_compute(&mut self, level: &PathNavigationRegion, pos: BlockPos) -> PathType {
+    pub fn get_or_compute(&mut self, level: &mut impl BlockGetter, pos: BlockPos) -> PathType {
         let key = pos.as_long();
         let index = index(key);
         match self.get(index, key) {
@@ -29,15 +29,27 @@ impl PathTypeCache {
         }
     }
 
+    pub fn get_cached(&self, pos: BlockPos) -> Option<PathType> {
+        let key = pos.as_long();
+        self.get(index(key), key)
+    }
+
     fn get(&self, index: usize, key: i64) -> Option<PathType> {
         if self.positions[index] == key { self.path_types[index] } else { None }
     }
 
-    fn compute(&mut self, level: &PathNavigationRegion, pos: BlockPos, index: usize, key: i64) -> PathType {
+    fn compute(&mut self, level: &mut impl BlockGetter, pos: BlockPos, index: usize, key: i64) -> PathType {
         let path_type = get_path_type_from_state(level, pos);
         self.positions[index] = key;
         self.path_types[index] = Some(path_type);
         path_type
+    }
+
+    pub fn store(&mut self, pos: BlockPos, path_type: PathType) {
+        let key = pos.as_long();
+        let index = index(key);
+        self.positions[index] = key;
+        self.path_types[index] = Some(path_type);
     }
 
     pub fn invalidate(&mut self, pos: BlockPos) {
