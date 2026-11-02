@@ -349,17 +349,10 @@ fn is_skippable(id: i32) -> bool {
 }
 
 pub fn disconnection_reason(error: &anyhow::Error) -> Component {
-    match error.downcast_ref::<io::Error>() {
-        Some(error) if error.kind() == io::ErrorKind::TimedOut => Component::translatable("disconnect.timeout"),
-        Some(error) if error.kind() == io::ErrorKind::ConnectionAborted => Component::translatable_with("disconnect.genericReason", vec![Arg::String(format!("Internal Exception: {}", read_exception(error)))]),
+    match error.downcast_ref::<io::Error>().map(io::Error::kind) {
+        Some(io::ErrorKind::TimedOut) => Component::translatable("disconnect.timeout"),
         _ => Component::translatable("multiplayer.disconnect.generic"),
     }
-}
-
-fn read_exception(error: &io::Error) -> String {
-    let message = crate::util::java_nio::os_message(error);
-    let message = message.trim_end().trim_end_matches('.');
-    if cfg!(windows) { format!("java.io.IOException: {message}") } else { format!("io.netty.channel.unix.Errors$NativeIoException: readAddress(..) failed: {message}") }
 }
 
 pub fn spawn_io(
@@ -515,21 +508,10 @@ mod tests {
         assert_eq!(disconnection_reason(&anyhow::anyhow!("bad packet")).get_string(), "Disconnected");
     }
 
-    #[cfg(windows)]
     #[test]
-    fn aborted_reads_name_the_java_io_exception() {
-        let aborted = io::Error::from_raw_os_error(10053);
-        let message = crate::util::java_nio::os_message(&aborted);
-        assert!(!message.is_empty() && !message.contains("os error"));
-        assert_eq!(reason_text(aborted), format!("Internal Exception: java.io.IOException: {}", message.trim_end().trim_end_matches('.')));
-        assert_eq!(reason_text(io::Error::from_raw_os_error(10054)), "Disconnected");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn aborted_reads_name_the_netty_native_exception() {
-        assert_eq!(reason_text(io::Error::from_raw_os_error(103)), "Internal Exception: io.netty.channel.unix.Errors$NativeIoException: readAddress(..) failed: Software caused connection abort");
-        assert_eq!(reason_text(io::Error::from_raw_os_error(104)), "Disconnected");
+    fn aborted_reads_are_logged_as_a_plain_disconnect_like_vanilla() {
+        assert_eq!(reason_text(io::Error::from(io::ErrorKind::ConnectionAborted)), "Disconnected");
+        assert_eq!(reason_text(io::Error::from_raw_os_error(if cfg!(windows) { 10053 } else { 103 })), "Disconnected");
     }
 
     async fn closed_client(reset: bool) -> io::Error {
