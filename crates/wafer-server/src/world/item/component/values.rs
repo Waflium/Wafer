@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use wafer_data::{Block, ItemUseAnimation, Rarity};
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::codec::{Codec, Wrap, as_f32, as_f64, as_i32, as_i64};
 use super::types::compound;
@@ -433,6 +433,22 @@ pub fn typed_entity_data(v: &Nbt) -> (String, Nbt) {
     let mut tag = fields.copy();
     tag.remove_key("id");
     (id, Nbt::Compound(tag))
+}
+
+pub fn typed_entity_data_of(ty: &str, data: TagMap) -> Nbt {
+    let mut tag = strip_id(data);
+    tag.put("id", Nbt::String(ty.into()));
+    Nbt::Compound(tag)
+}
+
+fn strip_id(tag: TagMap) -> TagMap {
+    if tag.iter().any(|(key, _)| key == "id") {
+        let mut copy = tag.copy();
+        copy.remove_key("id");
+        copy
+    } else {
+        tag
+    }
 }
 
 pub fn block_state_properties(v: &Nbt) -> Vec<(String, String)> {

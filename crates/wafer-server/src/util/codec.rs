@@ -744,7 +744,7 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
         Nbt::LongArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
         Nbt::LazilyParsedNumber(text) => crate::util::gson::number_value(text),
         Nbt::List(items) => Value::Array(items.iter().map(to_json).collect()),
-        Nbt::Compound(fields) => Value::Object(fields.iter().map(|(k, v)| (k.clone(), to_json(v))).collect()),
+        Nbt::Compound(fields) => Value::Object(fields.iteration().map(|(k, v)| (k.clone(), to_json(v))).collect()),
     }
 }
 

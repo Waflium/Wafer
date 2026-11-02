@@ -134,3 +134,32 @@ fn custom_data_components_decode_copies() {
     let value = Nbt::Compound(grown(&["ax", "h", "i"]));
     assert_eq!(compound_keys(&dc::CUSTOM_DATA.decode(&value).unwrap()), ["ax", "h", "i"]);
 }
+
+#[test]
+fn typed_entity_data_of_strips_the_id_from_a_copy() {
+    let mut source = TagMap::new();
+    source.put("id", Nbt::String("minecraft:bee".into()));
+    for i in 0..13 {
+        source.put(&format!("grow{i}"), Nbt::Int(i));
+    }
+    for key in ["ax", "h", "i", "kc", "n7", "n24", "n3", "n13"] {
+        source.put(key, Nbt::Int(key.len() as i32));
+    }
+    for i in 0..13 {
+        source.remove_key(&format!("grow{i}"));
+    }
+    assert_eq!(keys(&source), ["n3", "h", "i", "n7", "n24", "n13", "ax", "kc", "id"]);
+    let typed = dc::values::typed_entity_data_of("minecraft:bee", source);
+    let (id, unsafe_data) = dc::values::typed_entity_data(&typed);
+    assert_eq!(id, "minecraft:bee");
+    assert_eq!(compound_keys(&unsafe_data), ["n24", "n13", "n3", "ax", "h", "kc", "i", "n7"]);
+    assert_eq!(compound_keys(&dc::ENTITY_DATA.encode(&typed)), ["n24", "n13", "n3", "ax", "h", "kc", "i", "n7", "id"]);
+}
+
+#[test]
+fn codec_to_json_walks_the_compound_in_hash_map_order() {
+    let tag = Nbt::Compound(grown(&["ax", "h", "i", "kc", "n7", "n24", "n3", "n13"]));
+    let json = crate::util::codec::to_json(&tag);
+    let order: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(order, ["n3", "h", "i", "n7", "n24", "n13", "ax", "kc"]);
+}

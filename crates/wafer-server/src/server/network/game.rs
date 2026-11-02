@@ -1262,7 +1262,7 @@ impl ServerLevel {
             stack.set(crate::world::item::component::BLOCK_ENTITY_DATA, None);
         } else {
             output.push(("id".into(), wafer_protocol::nbt::Nbt::String(block_entity.ty().name().into())));
-            stack.set(crate::world::item::component::BLOCK_ENTITY_DATA, Some(wafer_protocol::nbt::Nbt::Compound(output)));
+            stack.set(crate::world::item::component::BLOCK_ENTITY_DATA, Some(crate::world::item::component::values::typed_entity_data_of(block_entity.ty().name(), output)));
         }
         for (component, value) in block_entity.collect_components() {
             stack.set(component, value);

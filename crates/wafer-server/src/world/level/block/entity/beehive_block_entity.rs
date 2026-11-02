@@ -63,11 +63,11 @@ impl Occupant {
         let entity_type = registry::ENTITY_TYPE[level.entity(entity).entity_type as usize];
         let mut entity_tag = match level.save_entity(entity) {
             Some(Nbt::Compound(fields)) => fields,
-            _ => vec![("id".into(), Nbt::String(entity_type.into()))].into(),
+            _ => wafer_protocol::nbt::TagMap::new(),
         };
         entity_tag.retain(|(key, _)| !IGNORED_BEE_TAGS.contains(&key.as_str()));
         let has_nectar = entity_tag.iter().find(|(key, _)| key == "HasNectar").and_then(|(_, value)| value.as_i64()).is_some_and(|v| v != 0);
-        Occupant { entity_data: Nbt::Compound(entity_tag), ticks_in_hive: 0, min_ticks_in_hive: if has_nectar { MIN_OCCUPATION_TICKS_NECTAR } else { MIN_OCCUPATION_TICKS_NECTARLESS } }
+        Occupant { entity_data: dc::values::typed_entity_data_of(entity_type, entity_tag), ticks_in_hive: 0, min_ticks_in_hive: if has_nectar { MIN_OCCUPATION_TICKS_NECTAR } else { MIN_OCCUPATION_TICKS_NECTARLESS } }
     }
 
     pub fn create(ticks_in_hive: i32) -> Occupant {
