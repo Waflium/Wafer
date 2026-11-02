@@ -204,8 +204,8 @@ fn process_io_request(shared: &IoShared, request: IoRequest) {
                 std::mem::forget(reply);
             }
             result => reply(result.map_err(|e| {
-                let failure = storage_exception::on_load_worker(&e);
-                crate::world::level::chunk::storage::chunk_stream::create_reported_crash_report(&failure);
+                let mut failure = storage_exception::on_load_worker(&e);
+                crate::world::level::chunk::storage::chunk_stream::create_reported_crash_report(&mut failure);
                 warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
                 io::Error::new(e.kind(), failure)
             })),

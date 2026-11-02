@@ -6,6 +6,7 @@ pub struct ThrowableReport {
     pub category: String,
     pub details: Vec<(String, String)>,
     pub category_stack_trace: Vec<&'static str>,
+    pub system_report: Option<std::sync::Arc<Vec<(String, String)>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3204,8 +3204,7 @@ impl ServerLevel {
     }
 
     pub fn detached_entity_to_string(&self, entity: &LevelEntity) -> String {
-        let class = super::entity_class_names::simple_name(registry::ENTITY_TYPE[entity.entity().entity_type as usize]);
-        java_entity_to_string(class, entity.entity(), &entity.name().get_string(), &self.level_name)
+        detached_entity_to_string(entity, &self.level_name)
     }
 
     pub fn plain_text_name(&self, id: EntityId) -> String {
@@ -3217,6 +3216,11 @@ impl ServerLevel {
         }
         self.dragon_part_entity(id).map_or_else(String::new, |part| super::entity_name(part).get_string())
     }
+}
+
+pub fn detached_entity_to_string(entity: &LevelEntity, level_name: &str) -> String {
+    let class = super::entity_class_names::simple_name(registry::ENTITY_TYPE[entity.entity().entity_type as usize]);
+    java_entity_to_string(class, entity.entity(), &entity.name().get_string(), level_name)
 }
 
 pub fn java_entity_to_string(class: &str, entity: &Entity, name: &str, level_name: &str) -> String {

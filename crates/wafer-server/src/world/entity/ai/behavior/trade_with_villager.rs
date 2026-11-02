@@ -11,6 +11,27 @@ use crate::world::entity::{EntityId, entity_types};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 
+const IDLE_TRADE_TICK_FRAMES: [&str; 18] = [
+    "net.minecraft.world.entity.ai.behavior.TradeWithVillager.tick(TradeWithVillager.java:61)",
+    "net.minecraft.world.entity.ai.behavior.TradeWithVillager.tick(TradeWithVillager.java:23)",
+    "net.minecraft.world.entity.ai.behavior.Behavior.tickOrStop(Behavior.java:66)",
+    "net.minecraft.world.entity.ai.behavior.GateBehavior.lambda$tickOrStop$1(GateBehavior.java:80)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:186)",
+    "java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:197)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1716)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.world.entity.ai.behavior.GateBehavior.tickOrStop(GateBehavior.java:80)",
+    "net.minecraft.world.entity.ai.Brain.tickEachRunningBehavior(Brain.java:479)",
+    "net.minecraft.world.entity.ai.Brain.tick(Brain.java:436)",
+    "net.minecraft.world.entity.npc.villager.Villager.customServerAiStep(Villager.java:236)",
+];
+
 pub struct TradeWithVillager {
     behavior: BehaviorState,
     trades: Vec<Item>,
@@ -88,7 +109,7 @@ impl Behavior for TradeWithVillager {
             return;
         }
         behavior_utils::lock_gaze_and_walk_to_each_other(level, body, target, 0.5, 2);
-        level.gossip(body, target, timestamp);
+        crate::server::main_thread_frames::within(&IDLE_TRADE_TICK_FRAMES, || level.gossip(body, target, timestamp));
         let is_farmer = level.get_villager_data(body).profession == ProfessionId::FARMER;
         if has_excess_food(level.mob(body).expect("a villager")) && (is_farmer || wants_more_food(level.mob(target).expect("a villager"))) {
             throw_half_stack(level, body, |item_stack| item_stack.has(dc::VILLAGER_FOOD), target);

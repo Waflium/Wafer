@@ -123,13 +123,17 @@ fn misplaced_chunk_exception(stored_pos: ChunkPos, requested_pos: ChunkPos, fram
     let illegal_state = JavaThrowable::new(format!("java.lang.IllegalStateException: Retrieved chunk position {stored_pos} does not match requested {requested_pos}"), frames.clone());
     let mut reported_frames = frames.clone();
     reported_frames[0] = MISPLACED_CHUNK_REPORTED_FRAME;
+    let _creator = crate::util::java_stack::enter_all(&frames);
     let report = ThrowableReport {
         title: "Chunk found in invalid location".to_string(),
         category: "Misplaced Chunk".to_string(),
         details: vec![("Stored Position".to_string(), stored_pos.to_string())],
-        category_stack_trace: frames,
+        category_stack_trace: frames.clone(),
+        system_report: None,
     };
-    JavaThrowable::new("net.minecraft.ReportedException: Chunk found in invalid location", reported_frames).with_cause(illegal_state).with_report(report)
+    let mut reported = JavaThrowable::new("net.minecraft.ReportedException: Chunk found in invalid location", reported_frames).with_cause(illegal_state).with_report(report);
+    CrashReport::create_for_reported(&mut reported);
+    reported
 }
 
 fn store_report(report: &mut CrashReport, debug_directory: &Path, pos: ChunkPos, storage_info: &RegionStorageInfo) -> Result<(), JavaThrowable> {
@@ -251,7 +255,7 @@ mod tests {
     #[test]
     fn unwraps_completion_exceptions_and_reported_exceptions_like_chunk_map() {
         let io = JavaThrowable::new("java.io.EOFException", Vec::new());
-        let report = ThrowableReport { title: "Loading NBT data".to_string(), category: "NBT Tag".to_string(), details: Vec::new(), category_stack_trace: Vec::new() };
+        let report = ThrowableReport { title: "Loading NBT data".to_string(), category: "NBT Tag".to_string(), details: Vec::new(), category_stack_trace: Vec::new(), system_report: None };
         let reported = JavaThrowable::new("net.minecraft.nbt.ReportedNbtException: Loading NBT data", Vec::new()).with_cause(io.clone()).with_report(report);
         let completion = JavaThrowable::new("java.util.concurrent.CompletionException: x", Vec::new()).with_cause(reported.clone());
         assert_eq!(chunk_load_failure_cause(&completion).description, "java.io.EOFException");

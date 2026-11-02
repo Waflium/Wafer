@@ -116,7 +116,9 @@ const BLOCK_TICK_FRAMES: [&str; 6] = [
     crate::server::command_frames::TICK_CHILDREN_LEVELS,
 ];
 
-const WORLD_GEN_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.status.ChunkStatusTasks";
+const GUARD_ENTITY_TICK_FOR_THROWABLE_FRAME: &str = "net.minecraft.world.level.Level.guardEntityTick(Level.java:486)";
+const GUARD_ENTITY_TICK_ADD_CATEGORY_FRAME: &str = "net.minecraft.world.level.Level.guardEntityTick(Level.java:487)";
+const WORLD_GEN_CHUNK_ENTITIES_LOGGER: &str ="net.minecraft.world.level.chunk.status.ChunkStatusTasks";
 const LEGACY_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData";
 const LOAD_ENTITIES_RECURSIVE_STREAM: [&str; 10] = [
     "net.minecraft.world.entity.EntityType.lambda$loadEntitiesRecursive$0(EntityType.java:388)",
@@ -1809,18 +1811,23 @@ impl ServerLevel {
 
     pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
         if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(self))) {
-            let (mut report, reported) = match panic.downcast::<crate::crash_report::ReportedException>() {
-                Ok(reported) => (reported.0, true),
-                Err(panic) => (crate::crash_report::CrashReport::new("Ticking entity", crate::crash_report::exception_of(&panic), crate::server::crash_frames()), false),
+            let mut below_guard: Vec<&'static str> = crate::server::command_frames::ENTITY_TICK[2..].to_vec();
+            below_guard.push(crate::server::command_frames::TICK_CHILDREN_LEVELS);
+            below_guard.extend(crate::server::main_thread_frames::current());
+            let mut report = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => reported.0,
+                Err(panic) => {
+                    let mut creator = vec![GUARD_ENTITY_TICK_FOR_THROWABLE_FRAME];
+                    creator.extend_from_slice(&below_guard);
+                    let _creator = crate::util::java_stack::enter_all(&creator);
+                    match panic.downcast::<crate::crash_report::JavaException>() {
+                        Ok(exception) => crate::crash_report::CrashReport::for_throwable(&exception.0, "Ticking entity"),
+                        Err(panic) => crate::crash_report::CrashReport::new("Ticking entity", crate::crash_report::exception_of(&panic), crate::server::crash_frames()),
+                    }
+                }
             };
-            let category = if reported {
-                let mut frames: Vec<String> = crate::server::command_frames::ENTITY_TICK[1..].iter().map(|frame| frame.to_string()).collect();
-                frames.push(crate::server::command_frames::TICK_CHILDREN_LEVELS.to_string());
-                frames.extend(crate::server::main_thread_frames::current().into_iter().map(str::to_string));
-                report.add_category_with_stack_trace("Entity being ticked", frames)
-            } else {
-                report.add_category("Entity being ticked")
-            };
+            let frames = std::iter::once(GUARD_ENTITY_TICK_ADD_CATEGORY_FRAME).chain(below_guard).map(str::to_string).collect();
+            let category = report.add_category_with_stack_trace("Entity being ticked", frames);
             self.fill_crash_report_category(id, category);
             std::panic::resume_unwind(Box::new(crate::crash_report::ReportedException(report)));
         }

@@ -141,6 +141,34 @@ fn a_panic_while_ticking_an_entity_becomes_a_ticking_entity_crash_report() {
 }
 
 #[test]
+fn a_java_exception_while_ticking_an_entity_is_split_into_head_and_category_like_guard_entity_tick() {
+    use crate::server::{command_frames, main_thread_frames};
+    let mut level = testing::level();
+    let zombie = add(&mut level, Zombie::create(), 0.5, 0.5);
+    let _tick = main_thread_frames::tick();
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        level.guard_entity_tick(zombie, |_| {
+            main_thread_frames::within(&command_frames::TICK_NON_PASSENGER, || {
+                let mut frames = vec!["a.B.c(B.java:1)"];
+                frames.extend(main_thread_frames::current());
+                crate::crash_report::throw_java_exception(crate::util::java_throwable::JavaThrowable::new("java.lang.IllegalStateException: x", frames))
+            })
+        })
+    }))
+    .unwrap_err();
+    let report = panic.downcast::<crate::crash_report::ReportedException>().unwrap().0;
+    assert_eq!(report.exception(), "java.lang.IllegalStateException: x");
+    let text = report.get_friendly_report(&crate::crash_report::ReportType::CRASH).replace("\r\n", "\n");
+    let sections: Vec<&str> = text.split("\n\n").filter(|section| section.starts_with("-- ")).collect();
+    let head: Vec<&str> = sections[0].lines().collect();
+    assert_eq!(head[3..], ["\tat a.B.c(B.java:1)", "\tat net.minecraft.server.level.ServerLevel.tickNonPassenger(ServerLevel.java:860)"]);
+    let ticked: Vec<&str> = sections[1].lines().skip_while(|line| *line != "Stacktrace:").skip(1).map(|line| line.trim_start_matches("\tat ")).collect();
+    let mut expected: Vec<&str> = command_frames::TICK_NON_PASSENGER[1..].to_vec();
+    expected.extend(command_frames::TICK_LOOP);
+    assert_eq!(ticked, expected);
+}
+
+#[test]
 fn entity_strings_round_half_up_and_show_the_removal_reason() {
     let mut level = testing::level();
     let zombie = add(&mut level, Zombie::create(), 0.125, 0.375);

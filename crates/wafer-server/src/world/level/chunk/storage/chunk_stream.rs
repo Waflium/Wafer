@@ -694,9 +694,8 @@ fn static_size(kind: TagKind) -> i32 {
     }
 }
 
-pub fn create_reported_crash_report(failure: &JavaThrowable) {
-    let (Some(report), Some(cause)) = (&failure.report, failure.cause.as_deref()) else { return };
-    if failure.description != REPORTED_NBT_EXCEPTION {
+pub fn create_reported_crash_report(failure: &mut JavaThrowable) {
+    if failure.report.is_none() || failure.cause.is_none() || failure.description != REPORTED_NBT_EXCEPTION {
         return;
     }
     let creator = match failure.stack_trace.first() {
@@ -706,11 +705,11 @@ pub fn create_reported_crash_report(failure: &JavaThrowable) {
     };
     let frames: Vec<&'static str> = std::iter::once(creator).chain(failure.stack_trace[1..].iter().copied()).collect();
     let _creator = crate::util::java_stack::enter_all(&frames);
-    crate::crash_report::CrashReport::for_throwable(cause, &report.title);
+    crate::crash_report::CrashReport::create_for_reported(failure);
 }
 
 fn wrap(cause: Failure, throw_frame: &'static str, details: Vec<(String, String)>, load_frame: &'static str) -> Failure {
-    let report = ThrowableReport { title: "Loading NBT data".to_string(), category: "NBT Tag".to_string(), details, category_stack_trace: vec![load_frame] };
+    let report = ThrowableReport { title: "Loading NBT data".to_string(), category: "NBT Tag".to_string(), details, category_stack_trace: vec![load_frame], system_report: None };
     JavaThrowable::new(REPORTED_NBT_EXCEPTION, vec![throw_frame]).with_cause(cause).with_report(report)
 }
 

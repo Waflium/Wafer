@@ -91,11 +91,11 @@ impl PersistentEntitySectionManager {
         self.chunk_load_statuses.get(chunk_key).copied().unwrap_or_default()
     }
 
-    fn add_entity_uuid(&mut self, uuid: u128) -> bool {
+    fn add_entity_uuid(&mut self, uuid: u128, entity: impl FnOnce() -> String) -> bool {
         if self.known_uuids.insert(uuid) {
             true
         } else {
-            warn!("UUID of added entity already exists: {}", crate::world::level::storage::format_uuid(uuid));
+            warn!("UUID of added entity already exists: {}", entity());
             false
         }
     }
@@ -196,7 +196,8 @@ impl ServerLevel {
 
     pub(crate) fn add_entity(&mut self, entity: LevelEntity) -> bool {
         let e = entity.entity();
-        if !self.entity_manager.add_entity_uuid(e.uuid) {
+        let level_name = &self.level_name;
+        if !self.entity_manager.add_entity_uuid(e.uuid, || crate::world::entity::detached_entity_to_string(&entity, level_name)) {
             return false;
         }
         let (id, key) = (e.id, section_key(e.block_position()));

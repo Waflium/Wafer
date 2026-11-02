@@ -263,6 +263,14 @@ impl CrashReport {
     }
 
     pub fn new(title: &str, exception: String, stack_trace: Vec<String>) -> CrashReport {
+        let system_report = {
+            let _init = java_stack::enter(CRASH_REPORT_INIT_FRAME);
+            SystemReport::new().into_entries()
+        };
+        CrashReport::with_system_report(title, exception, stack_trace, system_report)
+    }
+
+    fn with_system_report(title: &str, exception: String, stack_trace: Vec<String>, system_report: Vec<(String, String)>) -> CrashReport {
         CrashReport {
             title: title.to_string(),
             exception,
@@ -270,10 +278,7 @@ impl CrashReport {
             throwable: None,
             suppressed: Vec::new(),
             details: Vec::new(),
-            system_report: {
-                let _init = java_stack::enter(CRASH_REPORT_INIT_FRAME);
-                SystemReport::new().into_entries()
-            },
+            system_report,
             tracking_stack_trace: true,
             uncategorized_stack_trace: Vec::new(),
             save_file: None,
@@ -291,7 +296,14 @@ impl CrashReport {
             }
         }
         if let (Some(info), Some(cause)) = (&throwable.report, throwable.cause.as_deref()) {
-            let mut report = CrashReport::of_exception(&info.title, cause);
+            let mut report = match &info.system_report {
+                Some(system_report) => {
+                    let mut report = CrashReport::with_system_report(&info.title, cause.description.clone(), cause.stack_trace.iter().map(|frame| frame.to_string()).collect(), system_report.to_vec());
+                    report.throwable = Some(cause.clone());
+                    report
+                }
+                None => CrashReport::of_exception(&info.title, cause),
+            };
             let category = report.add_category_with_stack_trace(&info.category, info.category_stack_trace.iter().map(|frame| frame.to_string()).collect());
             for (key, value) in &info.details {
                 category.set_detail(key, value.clone());
@@ -299,6 +311,15 @@ impl CrashReport {
             return report;
         }
         CrashReport::of_exception(title, throwable)
+    }
+
+    pub fn create_for_reported(reported: &mut JavaThrowable) {
+        let Some(cause) = reported.cause.as_deref() else { return };
+        let Some(info) = &reported.report else { return };
+        let system_report = CrashReport::for_throwable(cause, &info.title).system_report;
+        if let Some(info) = &mut reported.report {
+            info.system_report = Some(std::sync::Arc::new(system_report));
+        }
     }
 
     pub fn of_exception(title: &str, exception: &JavaThrowable) -> CrashReport {

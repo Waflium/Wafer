@@ -4,10 +4,17 @@ use wafer_protocol::nbt::Nbt;
 use super::gossip_type::GossipType;
 use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::java_collections::JavaHashCode;
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::entity::entity_save::decode_uuid;
 use crate::world::level::storage::uuid_ints;
 
 pub const DISCARD_THRESHOLD: i32 = 2;
+
+const BOUND_MUST_BE_POSITIVE_FRAMES: [&str; 3] = [
+    "net.minecraft.world.level.levelgen.BitRandomSource.nextInt(BitRandomSource.java:20)",
+    "net.minecraft.world.entity.ai.gossip.GossipContainer.selectGossipsForTransfer(GossipContainer.java:147)",
+    "net.minecraft.world.entity.ai.gossip.GossipContainer.transferFrom(GossipContainer.java:159)",
+];
 
 #[derive(Clone, Debug, Default)]
 struct EntityGossips {
@@ -77,8 +84,24 @@ struct GossipEntry {
 
 impl GossipEntry {
     fn weighted_value(&self) -> i32 {
-        self.value * self.ty.weight()
+        self.value.wrapping_mul(self.ty.weight())
     }
+}
+
+fn binary_search(ranges: &[i32], key: i32) -> usize {
+    let (mut low, mut high) = (0i32, ranges.len() as i32 - 1);
+    while low <= high {
+        let mid = ((low as u32 + high as u32) >> 1) as i32;
+        let mid_value = ranges[mid as usize];
+        if mid_value < key {
+            low = mid + 1;
+        } else if mid_value > key {
+            high = mid - 1;
+        } else {
+            return mid as usize;
+        }
+    }
+    low as usize
 }
 
 #[derive(Clone, Debug)]
@@ -150,18 +173,20 @@ impl GossipContainer {
             return Vec::new();
         }
         let mut ranges = vec![0; entries.len()];
-        let mut ranges_end = 0;
+        let mut ranges_end: i32 = 0;
         for (i, gossip) in entries.iter().enumerate() {
-            ranges_end += gossip.weighted_value().abs();
-            ranges[i] = ranges_end - 1;
+            ranges_end = ranges_end.wrapping_add(gossip.weighted_value().wrapping_abs());
+            ranges[i] = ranges_end.wrapping_sub(1);
         }
         let mut results: Vec<usize> = Vec::new();
         for _ in 0..max_count {
+            if ranges_end <= 0 {
+                let mut frames = BOUND_MUST_BE_POSITIVE_FRAMES.to_vec();
+                frames.extend(crate::server::main_thread_frames::current());
+                crate::crash_report::throw_java_exception(JavaThrowable::new("java.lang.IllegalArgumentException: Bound must be positive", frames));
+            }
             let choice = random.next_int_bounded(ranges_end);
-            let selected_index = match ranges.binary_search(&choice) {
-                Ok(index) => index,
-                Err(index) => index,
-            };
+            let selected_index = binary_search(&ranges, choice);
             if !results.contains(&selected_index) {
                 results.push(selected_index);
             }
@@ -277,5 +302,28 @@ impl GossipContainer {
             if value < 1 { Err(format!("Value must be positive: {value}")) } else { Ok(value) }
         });
         record.build(|| Some((target?, ty?, value?)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overflowing_gossip_weights_throw_from_next_int_like_vanilla() {
+        let mut source = GossipContainer::default();
+        source.get_or_create(1).put(GossipType::MinorPositive, 2_000_000_000);
+        source.get_or_create(2).put(GossipType::MinorPositive, 2_000_000_000);
+        let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| GossipContainer::default().transfer_from(&source, &mut wafer_core::random::LegacyRandomSource::new(0), 10))).unwrap_err();
+        let exception = thrown.downcast::<crate::crash_report::JavaException>().expect("a java exception").0;
+        assert_eq!(exception.description, "java.lang.IllegalArgumentException: Bound must be positive");
+        assert_eq!(&exception.stack_trace[..3], &BOUND_MUST_BE_POSITIVE_FRAMES);
+    }
+
+    #[test]
+    fn selected_ranges_use_java_binary_search_insertion_points() {
+        let ranges = [4, 9, 19];
+        assert_eq!([0, 4, 5, 9, 10, 19].map(|key| binary_search(&ranges, key)), [0, 0, 1, 1, 2, 2]);
+        assert_eq!(binary_search(&[5, -3, 7], 6), 2);
     }
 }

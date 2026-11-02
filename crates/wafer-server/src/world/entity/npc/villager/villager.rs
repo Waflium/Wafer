@@ -751,7 +751,9 @@ impl ServerLevel {
         if (timestamp < last || timestamp >= last + GOSSIP_COOLDOWN) && (timestamp < target_last || timestamp >= target_last + GOSSIP_COOLDOWN) {
             let source_gossips = self.villager(target).gossips.clone();
             let mut random = std::mem::replace(&mut self.entity_mut(id).random, wafer_core::random::LegacyRandomSource::new(0));
-            let new_gossip = self.villager_mut(id).gossips.transfer_from(&source_gossips, &mut random, MAX_GOSSIP_TOPICS);
+            let new_gossip = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.Villager.gossip(Villager.java:835)"], || {
+                self.villager_mut(id).gossips.transfer_from(&source_gossips, &mut random, MAX_GOSSIP_TOPICS)
+            });
             self.entity_mut(id).random = random;
             self.villager_mut(id).last_gossip_time = timestamp;
             self.villager_mut(target).last_gossip_time = timestamp;
