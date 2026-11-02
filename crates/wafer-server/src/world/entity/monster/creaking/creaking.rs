@@ -149,7 +149,7 @@ impl ServerLevel {
         }
         creaking_mut(self.mob_mut(id).expect("a creaking")).attack_animation_remaining_ticks = ATTACK_ANIMATION_DURATION;
         self.broadcast_entity_event(id, 4);
-        self.mob_do_hurt_target(id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.creaking.Creaking.doHurtTarget(Creaking.java:175)"], || self.mob_do_hurt_target(id, target))
     }
 
     pub fn creaking_hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {
@@ -188,7 +188,7 @@ impl ServerLevel {
     }
 
     pub fn creaking_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "creakingBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.creaking.Creaking.customServerAiStep(Creaking.java:239)"], || Brain::tick_in_zone(self, id, "creakingBrain"));
         if self.mob(id).is_none() {
             return;
         }

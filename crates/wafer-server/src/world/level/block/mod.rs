@@ -559,7 +559,9 @@ pub fn class_name(block: wafer_data::Block) -> String {
 
 pub fn block_fall_on(level: &mut ServerLevel, state: BlockState, _pos: BlockPos, entity: EntityId, fall_distance: f64) {
     let reduced = fall_distance * (1.0f32 - state.block().info().fall_distance_reduction) as f64;
-    level.cause_fall_damage(entity, reduced, 1.0, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::FALL));
+    crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.Block.fallOn(Block.java:501)"], || {
+        level.cause_fall_damage(entity, reduced, 1.0, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::FALL))
+    });
 }
 
 pub fn push_entities_up(state: BlockState, new_state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> BlockState {

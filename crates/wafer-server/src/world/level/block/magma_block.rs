@@ -11,7 +11,7 @@ pub struct MagmaBlock;
 impl BlockBehaviour for MagmaBlock {
     fn step_on(&self, level: &mut ServerLevel, _pos: BlockPos, _state: BlockState, entity: EntityId) {
         if !level.is_stepping_carefully(entity) && level.is_living(entity) {
-            level.hurt(entity, DamageSource::new(damage_types::HOT_FLOOR), 1.0);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.MagmaBlock.stepOn(MagmaBlock.java:17)"], || level.hurt(entity, DamageSource::new(damage_types::HOT_FLOOR), 1.0));
         }
     }
 }

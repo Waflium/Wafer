@@ -262,7 +262,9 @@ impl ServerLevel {
         match self.projectile(id).kind {
             ProjectileKind::ThrownEnderpearl(_) => self.thrown_enderpearl_tick(id),
             ProjectileKind::Arrow(_) => self.arrow_tick(id),
-            ProjectileKind::SpectralArrow(_) => self.abstract_arrow_tick(id),
+            ProjectileKind::SpectralArrow(_) => {
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.SpectralArrow.tick(SpectralArrow.java:38)"], || self.abstract_arrow_tick(id))
+            }
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick(id),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
             ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WitherSkull(_) | ProjectileKind::DragonFireball(_) => self.abstract_hurting_projectile_tick(id),

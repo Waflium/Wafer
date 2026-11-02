@@ -193,6 +193,7 @@ const REPORTED_EXCEPTION_LOADING_ENTITY_NBT: &str = "net.minecraft.ReportedExcep
 const ILLEGAL_STATE_EXCEPTION_INVALID_POSITION: &str = "java.lang.IllegalStateException: Entity has invalid position";
 pub const ENTITY_LOAD_INVALID_POSITION: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2440)";
 pub const ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2472)";
+const ENTITY_LOAD_FOR_THROWABLE: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2478)";
 const ENTITY_LOAD_REPORT: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2481)";
 const SPECTRAL_ARROW_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.projectile.arrow.SpectralArrow.readAdditionalSaveData(SpectralArrow.java:55)";
 const THROWN_TRIDENT_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.projectile.arrow.ThrownTrident.readAdditionalSaveData(ThrownTrident.java:200)";
@@ -304,7 +305,11 @@ fn throw_creating_entity_exception(cause: JavaThrowable, site: &[&'static str], 
     shared.extend_from_slice(site);
     let mut cause_frames = cause.stack_trace;
     cause_frames.extend_from_slice(&shared);
+    let mut creator_frames = vec![crate::crash_report::FOR_THROWABLE_FRAME, ENTITY_LOAD_FOR_THROWABLE];
+    creator_frames.extend_from_slice(&shared);
+    let creator = crate::util::java_stack::enter_all(&creator_frames);
     let mut report = crate::crash_report::CrashReport::of_exception("Loading entity NBT", &JavaThrowable::new(cause.description, cause_frames));
+    drop(creator);
     let mut reported_frames = vec![ENTITY_LOAD_REPORT];
     reported_frames.extend_from_slice(&shared);
     fill(report.add_category_with_stack_trace("Entity being loaded", reported_frames.iter().map(|frame| frame.to_string()).collect()));

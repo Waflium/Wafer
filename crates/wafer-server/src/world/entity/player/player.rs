@@ -326,7 +326,11 @@ impl ServerLevel {
         let total_damage = if deals_damage { base_damage + magic_boost } else { 0.0 };
         let old_living_entity_health = if self.is_living(target) { self.health(target) } else { 0.0 };
         let old_movement = self.entity(target).delta_movement;
-        let was_hurt = deals_damage && self.hurt_server(target, damage_source, total_damage);
+        let was_hurt = deals_damage
+            && crate::server::main_thread_frames::within(
+                &["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.player.Player.stabAttack(Player.java:1274)"],
+                || self.hurt_server(target, damage_source, total_damage),
+            );
         if deals_knockback {
             self.cause_extra_knockback(id, target, 0.4, old_movement, &damage_source, total_damage, false);
             let knockback = self.get_knockback(id, target, &damage_source);

@@ -1,4 +1,5 @@
-use wafer_core::Vec3;
+use wafer_core::{BlockPos, Vec3};
+use wafer_data::{blocks, mob_effects};
 use wafer_data::packets::play::serverbound;
 use wafer_protocol::nbt::Nbt;
 use wafer_protocol::Writer;
@@ -11,8 +12,10 @@ use crate::network::connection::Packet;
 use crate::network::login::{Profile, offline_uuid};
 use crate::server::{entity_tick_frames, main_thread_frames};
 use crate::world::InteractionHand;
+use crate::world::effect::MobEffectInstance;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
+use crate::world::level::update_flags::UPDATE_ALL;
 
 const ORIGIN: Vec3 = Vec3::new(0.5, -60.0, 0.5);
 
@@ -377,4 +380,330 @@ fn a_shoulder_entity_failing_during_an_entity_tick_crashes_with_the_vanilla_repo
     assert_eq!(*loaded.last().unwrap(), "\tat java.base/java.lang.Thread.run(Thread.java:1474)");
     let ticked: Vec<&str> = sections[2].lines().skip_while(|line| *line != "Stacktrace:").skip(1).map(|line| line.trim_start_matches("\tat ")).collect();
     assert_eq!(ticked, expected(&[&ENTITY_TICK_TAIL[1..], &TICK_TAIL]));
+}
+
+const PLAYER_TICK_TAIL: [&str; 13] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.tickPlayer(ServerGamePacketListenerImpl.java:345)",
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:320)",
+    "net.minecraft.network.Connection.tick(Connection.java:368)",
+    "net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:175)",
+    "net.minecraft.server.MinecraftServer.tickConnection(MinecraftServer.java:1158)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:401)",
+    "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
+    "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickServer(DedicatedServer.java:278)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1013)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const PLAYER_AI_STEP: [&str; 5] = [
+    "net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3236)",
+    "net.minecraft.world.entity.player.Player.aiStep(Player.java:490)",
+    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
+    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+];
+
+const ARROW_HIT: [&str; 5] = [
+    "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+    "net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)",
+    "net.minecraft.world.entity.projectile.arrow.AbstractArrow.hitTargetsOrDeflectSelf(AbstractArrow.java:321)",
+    "net.minecraft.world.entity.projectile.arrow.AbstractArrow.stepMoveAndHit(AbstractArrow.java:310)",
+    "net.minecraft.world.entity.projectile.arrow.AbstractArrow.tick(AbstractArrow.java:266)",
+];
+
+const HURTING_PROJECTILE_HIT: [&str; 3] = [
+    "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+    "net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)",
+    "net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile.tick(AbstractHurtingProjectile.java:99)",
+];
+
+fn entity_tick_failure(snbt: &str) -> Vec<&'static str> {
+    let (mut level, _player) = shoulder_level();
+    let tag = crate::world::item::component::custom::parse_snbt(snbt).unwrap();
+    let entity = level.load_entity(&tag).expect("an entity");
+    let id = entity.entity().id;
+    assert!(level.add_entity(entity));
+    let _tick = main_thread_frames::tick();
+    let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for _ in 0..40 {
+            level.tick_non_passenger(id);
+        }
+    }))
+    .unwrap_err();
+    thrown_frames(thrown)
+}
+
+fn player_tick_failure(setup: impl FnOnce(&mut ServerLevel, EntityId)) -> Vec<String> {
+    let (mut level, player) = shoulder_level();
+    setup(&mut level, player);
+    let _tick = main_thread_frames::tick();
+    let _connection = main_thread_frames::enter_static(&crate::server::CONNECTION_TICK_FRAMES);
+    let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for _ in 0..100 {
+            level.server_player_do_tick(player);
+        }
+    }))
+    .unwrap_err();
+    let report = thrown.downcast::<ReportedException>().expect("a reported exception").0;
+    assert_eq!(report.title(), "Loading entity NBT");
+    let text = report.get_friendly_report(&ReportType::CRASH).replace("\r\n", "\n");
+    text.lines()
+        .skip_while(|line| !line.starts_with("java.lang.ArrayIndexOutOfBoundsException"))
+        .skip(1)
+        .take_while(|line| line.starts_with("\tat "))
+        .map(|line| line.trim_start_matches("\tat ").to_string())
+        .skip_while(|frame| frame != SHOULDER_LOAD_HEAD[1])
+        .collect()
+}
+
+fn player_tick_expected(path: &[&'static str]) -> Vec<&'static str> {
+    expected(&[&SHOULDER_LOAD_HEAD[1..], path, &PLAYER_TICK_TAIL])
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_an_arrow_hit_matches_vanilla() {
+    let arrow = entity_tick_failure("{id:\"minecraft:arrow\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hurt = ["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:476)"];
+    assert_eq!(arrow, expected(&[&SHOULDER_LOAD_HEAD, &hurt, &ARROW_HIT, &["net.minecraft.world.entity.projectile.arrow.Arrow.tick(Arrow.java:80)"], &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let trident = entity_tick_failure("{id:\"minecraft:trident\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hurt = ["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.projectile.arrow.ThrownTrident.onHitEntity(ThrownTrident.java:149)"];
+    let tick = ["net.minecraft.world.entity.projectile.arrow.ThrownTrident.tick(ThrownTrident.java:101)"];
+    assert_eq!(trident, expected(&[&SHOULDER_LOAD_HEAD, &hurt, &ARROW_HIT, &tick, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_hurting_projectiles_matches_vanilla() {
+    let small_fireball = entity_tick_failure("{id:\"minecraft:small_fireball\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hit = [
+        "net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball.onHitEntity(SmallFireball.java:45)",
+        "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+        "net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball.onHit(SmallFireball.java:71)",
+        "net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)",
+        "net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile.tick(AbstractHurtingProjectile.java:99)",
+    ];
+    assert_eq!(small_fireball, expected(&[&SHOULDER_LOAD_HEAD, &hit, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let wither_skull = entity_tick_failure("{id:\"minecraft:wither_skull\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hit = [
+        "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHitEntity(WitherSkull.java:82)",
+        "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+        "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHit(WitherSkull.java:99)",
+    ];
+    assert_eq!(wither_skull, expected(&[&SHOULDER_LOAD_HEAD, &hit, &HURTING_PROJECTILE_HIT[1..], &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let wind_charge = entity_tick_failure("{id:\"minecraft:wind_charge\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hit = [
+        "net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.onHitEntity(AbstractWindCharge.java:101)",
+        "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+        "net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.onHit(AbstractWindCharge.java:132)",
+    ];
+    let tick = [
+        "net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.tick(AbstractWindCharge.java:171)",
+        "net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge.tick(WindCharge.java:52)",
+    ];
+    assert_eq!(wind_charge, expected(&[&SHOULDER_LOAD_HEAD, &hit, &HURTING_PROJECTILE_HIT[1..], &tick, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_thrown_projectiles_matches_vanilla() {
+    let snowball = entity_tick_failure("{id:\"minecraft:snowball\",Pos:[0.5d,-57.0d,0.5d],Motion:[0.0d,-1.0d,0.0d]}");
+    let hit = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball.onHitEntity(Snowball.java:59)",
+        "net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)",
+        "net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball.onHit(Snowball.java:64)",
+        "net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)",
+        "net.minecraft.world.entity.projectile.ThrowableProjectile.tick(ThrowableProjectile.java:65)",
+    ];
+    assert_eq!(snowball, expected(&[&SHOULDER_LOAD_HEAD, &hit, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let potion = entity_tick_failure(
+        "{id:\"minecraft:splash_potion\",Pos:[0.5d,-58.0d,0.5d],Motion:[0.0d,-0.5d,0.0d],Item:{id:\"minecraft:splash_potion\",count:1,components:{\"minecraft:potion_contents\":{potion:\"minecraft:harming\"}}}}",
+    );
+    let hit = [
+        "net.minecraft.world.effect.HealOrHarmMobEffect.applyInstantaneousEffect(HealOrHarmMobEffect.java:38)",
+        "net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion.onHitAsPotion(ThrownSplashPotion.java:67)",
+        "net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion.onHit(AbstractThrownPotion.java:84)",
+        "net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)",
+        "net.minecraft.world.entity.projectile.ThrowableProjectile.tick(ThrowableProjectile.java:65)",
+    ];
+    assert_eq!(potion, expected(&[&SHOULDER_LOAD_HEAD, &hit, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_tnt_and_firework_explosions_matches_vanilla() {
+    let tnt = entity_tick_failure("{id:\"minecraft:tnt\",Pos:[0.5d,-60.0d,0.5d],fuse:1s}");
+    let explode = [
+        "net.minecraft.world.level.ServerExplosion.hurtEntities(ServerExplosion.java:201)",
+        "net.minecraft.world.level.ServerExplosion.explode(ServerExplosion.java:248)",
+        "net.minecraft.server.level.ServerLevel.explode(ServerLevel.java:1218)",
+        "net.minecraft.world.level.Level.explode(Level.java:541)",
+        "net.minecraft.world.entity.item.PrimedTnt.explode(PrimedTnt.java:149)",
+        "net.minecraft.world.entity.item.PrimedTnt.tick(PrimedTnt.java:135)",
+    ];
+    assert_eq!(tnt, expected(&[&SHOULDER_LOAD_HEAD, &explode, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let firework = entity_tick_failure(
+        "{id:\"minecraft:firework_rocket\",Pos:[0.5d,-59.0d,0.5d],LifeTime:1,FireworksItem:{id:\"minecraft:firework_rocket\",count:1,components:{\"minecraft:fireworks\":{explosions:[{shape:\"small_ball\"}]}}}}",
+    );
+    let explode = [
+        "net.minecraft.world.entity.projectile.FireworkRocketEntity.dealExplosionDamage(FireworkRocketEntity.java:249)",
+        "net.minecraft.world.entity.projectile.FireworkRocketEntity.explode(FireworkRocketEntity.java:189)",
+        "net.minecraft.world.entity.projectile.FireworkRocketEntity.tick(FireworkRocketEntity.java:182)",
+    ];
+    assert_eq!(firework, expected(&[&SHOULDER_LOAD_HEAD, &explode, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_a_tnt_minecart_and_a_falling_anvil_matches_vanilla() {
+    let minecart = entity_tick_failure("{id:\"minecraft:tnt_minecart\",Pos:[0.5d,-60.0d,1.5d],fuse:1}");
+    let explode = [
+        "net.minecraft.world.level.ServerExplosion.hurtEntities(ServerExplosion.java:201)",
+        "net.minecraft.world.level.ServerExplosion.explode(ServerExplosion.java:248)",
+        "net.minecraft.server.level.ServerLevel.explode(ServerLevel.java:1218)",
+        "net.minecraft.world.level.Level.explode(Level.java:541)",
+        "net.minecraft.world.entity.vehicle.minecart.MinecartTNT.explode(MinecartTNT.java:110)",
+        "net.minecraft.world.entity.vehicle.minecart.MinecartTNT.tick(MinecartTNT.java:60)",
+    ];
+    assert_eq!(minecart, expected(&[&SHOULDER_LOAD_HEAD, &explode, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+    let anvil = entity_tick_failure("{id:\"minecraft:falling_block\",Pos:[0.5d,-55.0d,0.5d],BlockState:\"minecraft:anvil\",Time:1}");
+    let crush = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.entity.item.FallingBlockEntity.lambda$causeFallDamage$0(FallingBlockEntity.java:284)",
+        "java.base/java.util.ArrayList.forEach(ArrayList.java:1604)",
+        "net.minecraft.world.entity.item.FallingBlockEntity.causeFallDamage(FallingBlockEntity.java:283)",
+        "net.minecraft.world.level.block.Block.fallOn(Block.java:501)",
+        "net.minecraft.world.entity.Entity.checkFallDamage(Entity.java:1767)",
+        "net.minecraft.world.entity.Entity.move(Entity.java:914)",
+        "net.minecraft.world.entity.item.FallingBlockEntity.tick(FallingBlockEntity.java:164)",
+    ];
+    assert_eq!(anvil, expected(&[&SHOULDER_LOAD_HEAD, &crush, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_evoker_fangs_matches_vanilla() {
+    let fangs = entity_tick_failure("{id:\"minecraft:evoker_fangs\",Pos:[0.5d,-60.0d,0.5d]}");
+    let bite = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.entity.projectile.EvokerFangs.dealDamageTo(EvokerFangs.java:120)",
+        "net.minecraft.world.entity.projectile.EvokerFangs.tick(EvokerFangs.java:100)",
+    ];
+    assert_eq!(fangs, expected(&[&SHOULDER_LOAD_HEAD, &bite, &ENTITY_TICK_TAIL, &TICK_TAIL]));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_fire_and_lava_matches_vanilla() {
+    let fire = player_tick_failure(|level, _| {
+        level.set_block(BlockPos::new(0, -60, 0), blocks::FIRE.default_state(), UPDATE_ALL);
+    });
+    let in_fire = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.level.block.BaseFireBlock.lambda$entityInside$0(BaseFireBlock.java:126)",
+        "net.minecraft.world.entity.InsideBlockEffectApplier$StepBasedCollector.applyAndClear(InsideBlockEffectApplier.java:67)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1122)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1064)",
+    ];
+    assert_eq!(fire, player_tick_expected(&expected(&[&in_fire, &PLAYER_AI_STEP])));
+    let lava = player_tick_failure(|level, _| {
+        level.set_block(BlockPos::new(0, -60, 0), blocks::LAVA.default_state(), UPDATE_ALL);
+    });
+    let lava_hurt = [
+        "net.minecraft.world.entity.Entity.lavaHurt(Entity.java:718)",
+        "net.minecraft.world.entity.InsideBlockEffectApplier$StepBasedCollector.applyAndClear(InsideBlockEffectApplier.java:67)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1122)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1064)",
+    ];
+    assert_eq!(lava, player_tick_expected(&expected(&[&lava_hurt, &PLAYER_AI_STEP])));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_cactus_and_magma_matches_vanilla() {
+    let cactus = player_tick_failure(|level, _| {
+        level.set_block(BlockPos::new(0, -61, 0), blocks::SAND.default_state(), UPDATE_ALL);
+        level.set_block(BlockPos::new(0, -60, 0), blocks::CACTUS.default_state(), UPDATE_ALL);
+    });
+    let prick = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.level.block.CactusBlock.entityInside(CactusBlock.java:115)",
+        "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.entityInside(BlockBehaviour.java:1161)",
+        "net.minecraft.world.entity.Entity.lambda$checkInsideBlocks$0(Entity.java:1546)",
+        "net.minecraft.world.level.BlockGetter.forEachBlockIntersectedBetween(BlockGetter.java:217)",
+        "net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1510)",
+        "net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1490)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1121)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1064)",
+    ];
+    assert_eq!(cactus, player_tick_expected(&expected(&[&prick, &PLAYER_AI_STEP])));
+    let magma = player_tick_failure(|level, player| {
+        level.set_block(BlockPos::new(0, -61, 0), blocks::MAGMA_BLOCK.default_state(), UPDATE_ALL);
+        level.entity_mut(player).on_ground = true;
+    });
+    let hot_floor = [
+        "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+        "net.minecraft.world.level.block.MagmaBlock.stepOn(MagmaBlock.java:17)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1115)",
+        "net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1064)",
+    ];
+    assert_eq!(magma, player_tick_expected(&expected(&[&hot_floor, &PLAYER_AI_STEP])));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_starvation_and_effects_matches_vanilla() {
+    let starve = player_tick_failure(|level, player| {
+        let food = &mut level.player_mut(player).food_data;
+        food.food_level = 0;
+        food.saturation_level = 0.0;
+        food.tick_timer = 79;
+    });
+    let starving = ["net.minecraft.world.food.FoodData.tick(FoodData.java:68)", "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:746)"];
+    assert_eq!(starve, player_tick_expected(&starving));
+    let effect_tick = |effect_frame: &'static str| {
+        expected(&[
+            &[
+                effect_frame,
+                "net.minecraft.world.effect.MobEffectInstance.tickServer(MobEffectInstance.java:223)",
+                "net.minecraft.world.entity.LivingEntity.tickEffects(LivingEntity.java:903)",
+                "net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:526)",
+                "net.minecraft.world.entity.Entity.tick(Entity.java:583)",
+                "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2847)",
+                "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+                "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+            ],
+        ])
+    };
+    let poison = player_tick_failure(|level, player| {
+        assert!(level.add_effect(player, MobEffectInstance::new(mob_effects::POISON, 100, 5), None));
+    });
+    assert_eq!(poison, player_tick_expected(&effect_tick("net.minecraft.world.effect.PoisonMobEffect.applyEffectTick(PoisonMobEffect.java:16)")));
+    let wither = player_tick_failure(|level, player| {
+        assert!(level.add_effect(player, MobEffectInstance::new(mob_effects::WITHER, 100, 5), None));
+    });
+    assert_eq!(wither, player_tick_expected(&effect_tick("net.minecraft.world.effect.WitherMobEffect.applyEffectTick(WitherMobEffect.java:16)")));
+}
+
+#[test]
+fn a_shoulder_entity_failing_on_cave_spider_and_ravager_melee_matches_vanilla() {
+    let cave_spider = expected(&[
+        &SHOULDER_LOAD_HEAD,
+        &[MOB_DO_HURT_TARGET, "net.minecraft.world.entity.monster.spider.CaveSpider.doHurtTarget(CaveSpider.java:33)"],
+        &MELEE,
+        &EVEN_SELECTOR,
+        &MONSTER_STEP,
+        &MOB_TICK,
+        &["net.minecraft.world.entity.monster.spider.Spider.tick(Spider.java:87)"],
+        &ENTITY_TICK_TAIL,
+        &TICK_TAIL,
+    ]);
+    assert_eq!(melee_attack_frames("minecraft:cave_spider", false, &cave_spider), cave_spider);
+    let ravager = expected(&[
+        &SHOULDER_LOAD_HEAD,
+        &[MOB_DO_HURT_TARGET, "net.minecraft.world.entity.monster.Ravager.doHurtTarget(Ravager.java:321)"],
+        &MELEE,
+        &EVEN_SELECTOR,
+        &MONSTER_STEP,
+        &["net.minecraft.world.entity.raid.Raider.aiStep(Raider.java:117)", "net.minecraft.world.entity.monster.Ravager.aiStep(Ravager.java:150)"],
+        &MOB_TICK,
+        &ENTITY_TICK_TAIL,
+        &TICK_TAIL,
+    ]);
+    assert_eq!(melee_attack_frames("minecraft:ravager", false, &ravager), ravager);
 }

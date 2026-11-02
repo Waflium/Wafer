@@ -130,7 +130,10 @@ impl ServerLevel {
         match crate::world::item::component::kinetic_weapon::KineticWeapon::of(&stack) {
             Some(kinetic_weapon) => {
                 let slot = self.used_item_hand(id).as_equipment_slot();
-                kinetic_weapon.damage_entities(self, &stack, remaining, id, slot);
+                crate::server::main_thread_frames::within(
+                    &["net.minecraft.world.item.ItemStack.onUseTick(ItemStack.java:1120)", "net.minecraft.world.entity.LivingEntity.updateUsingItem(LivingEntity.java:3596)"],
+                    || kinetic_weapon.damage_entities(self, &stack, remaining, id, slot),
+                );
             }
             None => crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.updateUsingItem(LivingEntity.java:3596)"], || {
                 crate::world::item::on_use_tick(self, id, &mut stack, remaining)

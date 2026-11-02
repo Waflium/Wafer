@@ -31,8 +31,7 @@ impl Instance {
 
 pub fn sequence(mut first: impl Trigger + 'static, mut second: OneShot) -> OneShot {
     let required_memories = crate::world::entity::ai::behavior::behavior_control::BehaviorControl::get_required_memories(&second);
-    OneShot::with_required_memories(
-        Vec::new(),
+    OneShot::sequence(
         required_memories,
         Box::new(move |level: &mut crate::server::level::ServerLevel, body: crate::world::entity::EntityId, timestamp: i64| {
             first.trigger(level, body, timestamp) && second.trigger(level, body, timestamp)

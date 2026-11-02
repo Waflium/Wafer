@@ -356,7 +356,10 @@ impl ServerLevel {
             if new_count <= 0 {
                 let e = self.entity(id);
                 let position = Vec3::new(e.x(), e.eye_y(), e.z());
-                self.explode(Some(id), Some(id), None, position, 7.0, false, ExplosionInteraction::Mob);
+                crate::server::main_thread_frames::within(
+                    &[crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_FIRE, "net.minecraft.world.entity.boss.wither.WitherBoss.customServerAiStep(WitherBoss.java:256)"],
+                    || self.explode(Some(id), Some(id), None, position, 7.0, false, ExplosionInteraction::Mob),
+                );
                 if !self.entity(id).is_silent() {
                     let block_position = self.entity(id).block_position();
                     self.global_level_event(crate::server::level::events::SOUND_WITHER_BOSS_SPAWN, block_position, 0);

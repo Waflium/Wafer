@@ -147,7 +147,7 @@ impl ServerLevel {
         self.broadcast_entity_event(id, 4);
         self.make_sound(id, sound_event("minecraft:entity.hoglin.attack"));
         hoglin_ai::on_hit_target(self, id, target);
-        hoglin_base::hurt_and_throw_target(self, id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.hoglin.Hoglin.doHurtTarget(Hoglin.java:125)"], || hoglin_base::hurt_and_throw_target(self, id, target))
     }
 
     pub fn hoglin_blocked_by_item(&mut self, id: EntityId, defender: EntityId) {
@@ -166,7 +166,7 @@ impl ServerLevel {
     }
 
     pub fn hoglin_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "hoglinBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.hoglin.Hoglin.customServerAiStep(Hoglin.java:159)"], || Brain::tick_in_zone(self, id, "hoglinBrain"));
         if self.mob(id).is_none() {
             return;
         }

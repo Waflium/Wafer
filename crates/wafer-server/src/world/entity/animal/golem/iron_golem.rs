@@ -243,7 +243,7 @@ impl ServerLevel {
         let attack_damage = self.iron_golem_get_attack_damage(id);
         let damage = if attack_damage as i32 > 0 { attack_damage / 2.0 + self.entity_mut(id).random.next_int_bounded(attack_damage as i32) as f32 } else { attack_damage };
         let damage_source = DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(damage_types::MOB_ATTACK) };
-        let hurt = self.hurt_server(target, damage_source, damage);
+        let hurt = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.golem.IronGolem.doHurtTarget(IronGolem.java:200)"], || self.hurt_server(target, damage_source, damage));
         if hurt {
             let knockback_resistance = if self.is_living(target) { self.attribute_value(target, Attribute::KnockbackResistance) } else { 0.0 };
             let scale = (1.0 - knockback_resistance).max(0.0);

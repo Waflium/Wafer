@@ -30,7 +30,7 @@ impl ServerLevel {
 
     fn throwable_projectile_tick_end(&mut self, id: EntityId, result: HitResult) {
         if result.get_type() != Type::Miss && self.is_alive(id) {
-            self.hit_target_or_deflect_self(id, result);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.ThrowableProjectile.tick(ThrowableProjectile.java:65)"], || self.hit_target_or_deflect_self(id, result));
         }
     }
 

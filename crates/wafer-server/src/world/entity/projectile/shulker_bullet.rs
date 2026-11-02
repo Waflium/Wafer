@@ -235,7 +235,7 @@ impl ServerLevel {
 
     fn shulker_bullet_tick_hit(&mut self, id: EntityId, hit_result: HitResult, final_target: Option<EntityId>) {
         if self.is_alive(id) && hit_result.get_type() != Type::Miss {
-            self.hit_target_or_deflect_self(id, hit_result);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.ShulkerBullet.tick(ShulkerBullet.java:237)"], || self.hit_target_or_deflect_self(id, hit_result));
         }
         self.rotate_towards_movement(id, 0.5);
         let Some(final_target) = final_target else { return };

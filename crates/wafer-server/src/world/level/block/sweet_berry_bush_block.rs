@@ -42,7 +42,9 @@ impl BlockBehaviour for SweetBerryBushBlock {
             if movement.horizontal_distance_sqr() > 0.0 {
                 let (xs, zs) = (movement.x.abs(), movement.z.abs());
                 if xs >= 0.003f32 as f64 || zs >= 0.003f32 as f64 {
-                    level.hurt_server(entity, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::SWEET_BERRY_BUSH), 1.0);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.SweetBerryBushBlock.entityInside(SweetBerryBushBlock.java:95)"], || {
+                        level.hurt_server(entity, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::SWEET_BERRY_BUSH), 1.0)
+                    });
                 }
             }
         }

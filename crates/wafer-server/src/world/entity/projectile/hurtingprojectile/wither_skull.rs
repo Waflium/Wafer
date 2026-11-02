@@ -120,6 +120,10 @@ impl ServerLevel {
         let position = self.entity(id).position();
         let indirect_source = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
         let dangerous = is_dangerous(self.entity(id));
+        let scope = crate::server::main_thread_frames::enter_static(&[
+            crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_FIRE,
+            "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHit(WitherSkull.java:101)",
+        ]);
         self.explode_with_calculator(
             Some(id),
             indirect_source,
@@ -130,6 +134,7 @@ impl ServerLevel {
             false,
             ExplosionInteraction::Mob,
         );
+        drop(scope);
         self.discard(id);
     }
 }

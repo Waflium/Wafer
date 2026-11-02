@@ -417,7 +417,7 @@ impl ServerLevel {
     pub fn bee_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
         let damage_source = DamageSource::entity(damage_types::STING, id);
         let damage = self.attribute_value(id, crate::world::entity::attributes::Attribute::AttackDamage) as i32 as f32;
-        let was_hurt = self.hurt_server(target, damage_source.clone(), damage);
+        let was_hurt = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.bee.Bee.doHurtTarget(Bee.java:277)"], || self.hurt_server(target, damage_source.clone(), damage));
         if was_hurt {
             self.do_post_attack_effects(target, &damage_source);
             if self.is_living(target) {

@@ -846,7 +846,7 @@ impl ServerLevel {
 
     fn server_player_do_tick_end_unguarded(&mut self, id: EntityId, ticks: bool) {
         if ticks {
-            self.tick_food(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:746)"], || self.tick_food(id));
             self.award_stat(id, stats::PLAY_TIME, 1);
             self.award_stat(id, stats::TOTAL_WORLD_TIME, 1);
             if self.is_alive(id) {
@@ -952,7 +952,7 @@ impl ServerLevel {
         {
             return false;
         }
-        let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerPlayer.hurtServer(ServerPlayer.java:1078)"]);
+        let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerPlayer.hurtServer(ServerPlayer.java:1078)"]);
         self.player_hurt_server(id, source, damage)
     }
 

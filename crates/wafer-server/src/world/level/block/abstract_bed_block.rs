@@ -104,7 +104,10 @@ fn destroy_on_use(kind: BedKind, state: BlockState, level: &mut ServerLevel, pos
             }
             let boom_pos = Vec3::at_center_of(pos);
             let source = DamageSource { damage_source_position: Some(boom_pos), ..DamageSource::new(damage_types::BAD_RESPAWN_POINT) };
-            level.explode(None, None, Some(source), boom_pos, 5.0, true, ExplosionInteraction::Block);
+            crate::server::main_thread_frames::within(
+                &[crate::world::level::server_explosion::LEVEL_EXPLODE_AT, "net.minecraft.world.level.block.BedBlock.destroyOnUse(BedBlock.java:64)"],
+                || level.explode(None, None, Some(source), boom_pos, 5.0, true, ExplosionInteraction::Block),
+            );
         }
         BedKind::StrawBed => destroy_straw_bed(level, pos),
     }

@@ -155,7 +155,7 @@ impl ServerLevel {
         falling.time += 1;
         self.apply_gravity(id);
         let delta = self.entity(id).delta_movement;
-        self.move_entity(id, MoverType::SelfMove, delta);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.item.FallingBlockEntity.tick(FallingBlockEntity.java:164)"], || self.move_entity(id, MoverType::SelfMove, delta));
         self.apply_effects_from_blocks(id);
         self.handle_portal(id);
         self.then_tick(move |level| level.tick_falling_block_end(id, block));
@@ -283,9 +283,15 @@ impl ServerLevel {
             .into_iter()
             .filter(|&e| self.is_living(e) && self.is_alive(e) && !self.find_player(e).is_some_and(|p| p.game_mode.game_type.is_creative()))
             .collect();
+        let scope = crate::server::main_thread_frames::enter_static(&[
+            "net.minecraft.world.entity.item.FallingBlockEntity.lambda$causeFallDamage$0(FallingBlockEntity.java:284)",
+            "java.base/java.util.ArrayList.forEach(ArrayList.java:1604)",
+            "net.minecraft.world.entity.item.FallingBlockEntity.causeFallDamage(FallingBlockEntity.java:283)",
+        ]);
         for target in targets {
             self.hurt(target, actual_damage_source, damage);
         }
+        drop(scope);
         let is_anvil = block_state.is(&block_tags::ANVIL);
         let falling = self.falling_block(id);
         if is_anvil && damage > 0.0 && falling.entity.random.next_float() < 0.05 + fall_distance_int as f32 * 0.05 {

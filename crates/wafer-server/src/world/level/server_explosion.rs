@@ -42,7 +42,11 @@ const HURT_ENTITIES_FRAMES: [&str; 2] = [
     "net.minecraft.world.level.ServerExplosion.hurtEntities(ServerExplosion.java:201)",
     "net.minecraft.world.level.ServerExplosion.explode(ServerExplosion.java:248)",
 ];
-const EXPLODE_FRAMES: [&str; 2] = ["net.minecraft.server.level.ServerLevel.explode(ServerLevel.java:1218)", "net.minecraft.world.level.Level.explode(Level.java:529)"];
+const EXPLODE_FRAMES: [&str; 1] = ["net.minecraft.server.level.ServerLevel.explode(ServerLevel.java:1218)"];
+pub const LEVEL_EXPLODE: &str = "net.minecraft.world.level.Level.explode(Level.java:529)";
+pub const LEVEL_EXPLODE_WITH_FIRE: &str = "net.minecraft.world.level.Level.explode(Level.java:533)";
+pub const LEVEL_EXPLODE_AT: &str = "net.minecraft.world.level.Level.explode(Level.java:537)";
+pub const LEVEL_EXPLODE_WITH_SOURCE: &str = "net.minecraft.world.level.Level.explode(Level.java:541)";
 const MAX_DROPS_PER_COMBINED_STACK: i32 = 16;
 const LARGE_EXPLOSION_RADIUS: f32 = 2.0;
 

@@ -876,7 +876,10 @@ impl ServerLevel {
         let post_enchantment_damage = self.modify_damage(&weapon_item, target, &damage_source, base_damage);
         let old_movement = self.entity(target).delta_movement;
         let mut affected = deals_knockback;
-        let dealt_damage = deals_damage && self.hurt_server(target, damage_source, post_enchantment_damage);
+        let dealt_damage = deals_damage
+            && main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.stabAttack(LivingEntity.java:3002)"], || {
+                self.hurt_server(target, damage_source, post_enchantment_damage)
+            });
         affected |= dealt_damage;
         if deals_knockback {
             self.living_entity_cause_extra_knockback(id, target, 0.4, old_movement, &damage_source, post_enchantment_damage, false);
@@ -3013,7 +3016,7 @@ impl ServerLevel {
 
     fn server_player_push_entities(&mut self, id: EntityId) {
         if self.tick_rate_manager.runs_normally() {
-            self.living_entity_push_entities(id);
+            main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.pushEntities(ServerPlayer.java:1466)"], || self.living_entity_push_entities(id));
         }
     }
 
@@ -3028,7 +3031,7 @@ impl ServerLevel {
         if max_cramming > 0 && pushable.len() as i32 > max_cramming - 1 && self.entity_mut(id).random.next_int_bounded(4) == 0 {
             let count = pushable.iter().filter(|&&entity| !self.is_passenger(entity)).count();
             if count as i32 > max_cramming - 1 {
-                self.hurt_server(id, DamageSource::new(damage_types::CRAMMING), 6.0);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.pushEntities(LivingEntity.java:3347)"], || self.hurt_server(id, DamageSource::new(damage_types::CRAMMING), 6.0));
             }
         }
         for other in pushable {
@@ -3672,7 +3675,12 @@ impl ServerLevel {
             let tick_count = if instance.is_infinite_duration() { e.tick_count } else { instance.duration };
             let mut keep = instance.has_remaining_duration();
             if keep {
-                if should_apply_effect_tick_this_tick(effect, tick_count, amplifier) && !self.apply_effect_tick(id, effect, amplifier) {
+                if should_apply_effect_tick_this_tick(effect, tick_count, amplifier)
+                    && !main_thread_frames::within(
+                        &["net.minecraft.world.effect.MobEffectInstance.tickServer(MobEffectInstance.java:223)", "net.minecraft.world.entity.LivingEntity.tickEffects(LivingEntity.java:903)"],
+                        || self.apply_effect_tick(id, effect, amplifier),
+                    )
+                {
                     keep = false;
                 } else if self.living(id).effects_mod_count == mod_count {
                     let instance = &mut self.living_mut(id).active_effects[index];

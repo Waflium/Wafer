@@ -222,7 +222,9 @@ impl ServerLevel {
 
     pub fn tick_area_effect_cloud(&mut self, id: EntityId) {
         self.entity_tick(id);
-        self.then_tick(move |level| level.area_effect_cloud_server_tick(id));
+        self.then_tick(move |level| {
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.AreaEffectCloud.tick(AreaEffectCloud.java:157)"], || level.area_effect_cloud_server_tick(id))
+        });
     }
 
     fn area_effect_cloud_server_tick(&mut self, id: EntityId) {
@@ -279,7 +281,9 @@ impl ServerLevel {
             let owner = cloud.owner.and_then(|owner| owner.get_entity(self)).filter(|&owner| self.is_living(owner));
             for effect in &all_effects {
                 if effect.effect.info().instantaneous {
-                    self.apply_instantaneous_effect(effect.effect, Some(id), owner, entity, effect.amplifier, 0.5);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.AreaEffectCloud.serverTick(AreaEffectCloud.java:252)"], || {
+                        self.apply_instantaneous_effect(effect.effect, Some(id), owner, entity, effect.amplifier, 0.5)
+                    });
                 } else {
                     self.add_effect(entity, effect.clone(), Some(id));
                 }

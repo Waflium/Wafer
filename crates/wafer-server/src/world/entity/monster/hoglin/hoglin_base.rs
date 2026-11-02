@@ -14,7 +14,7 @@ pub fn hurt_and_throw_target(level: &mut ServerLevel, body: EntityId, target: En
     let actual_damage =
         if !level.is_baby(body) && attack_damage as i32 > 0 { attack_damage / 2.0 + level.random.next_int_bounded(attack_damage as i32) as f32 } else { attack_damage };
     let damage_source = DamageSource { causing_entity: Some(body), direct_entity: Some(body), ..DamageSource::new(damage_types::MOB_ATTACK) };
-    let was_hurt = level.hurt_server(target, damage_source.clone(), actual_damage);
+    let was_hurt = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.hoglin.HoglinBase.hurtAndThrowTarget(HoglinBase.java:28)"], || level.hurt_server(target, damage_source.clone(), actual_damage));
     if was_hurt {
         level.do_post_attack_effects(target, &damage_source);
         if !level.is_baby(body) {

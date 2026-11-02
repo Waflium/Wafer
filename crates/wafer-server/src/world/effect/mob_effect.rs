@@ -71,12 +71,16 @@ impl ServerLevel {
             }
             mob_effects::POISON => {
                 if self.health(id) > 1.0 {
-                    self.hurt_server(id, DamageSource::new(damage_types::MAGIC), 1.0);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.effect.PoisonMobEffect.applyEffectTick(PoisonMobEffect.java:16)"], || {
+                        self.hurt_server(id, DamageSource::new(damage_types::MAGIC), 1.0)
+                    });
                 }
                 true
             }
             mob_effects::WITHER => {
-                self.hurt_server(id, DamageSource::new(damage_types::WITHER), 1.0);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.effect.WitherMobEffect.applyEffectTick(WitherMobEffect.java:16)"], || {
+                    self.hurt_server(id, DamageSource::new(damage_types::WITHER), 1.0)
+                });
                 true
             }
             mob_effects::HUNGER => {
@@ -122,7 +126,9 @@ impl ServerLevel {
                 if is_harm == self.is_inverted_heal_and_harm(id) {
                     self.heal(id, 4i32.wrapping_shl(amplifier as u32).max(0) as f32);
                 } else {
-                    self.hurt_server(id, DamageSource::new(damage_types::MAGIC), 6i32.wrapping_shl(amplifier as u32) as f32);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.effect.HealOrHarmMobEffect.applyEffectTick(HealOrHarmMobEffect.java:23)"], || {
+                        self.hurt_server(id, DamageSource::new(damage_types::MAGIC), 6i32.wrapping_shl(amplifier as u32) as f32)
+                    });
                 }
                 true
             }
@@ -143,7 +149,9 @@ impl ServerLevel {
                         None => DamageSource::new(damage_types::MAGIC),
                         Some(source) => DamageSource::source(damage_types::INDIRECT_MAGIC, Some(source), owner),
                     };
-                    self.hurt_server(mob, damage_source, amount as f32);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.effect.HealOrHarmMobEffect.applyInstantaneousEffect(HealOrHarmMobEffect.java:38)"], || {
+                        self.hurt_server(mob, damage_source, amount as f32)
+                    });
                 }
             }
             _ => {

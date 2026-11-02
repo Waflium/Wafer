@@ -266,6 +266,6 @@ impl ServerLevel {
         ravager_mut(self.mob_mut(id).expect("a ravager")).attack_tick = ATTACK_DURATION;
         self.broadcast_entity_event(id, EVENT_ATTACK);
         self.entity_play_sound(id, sound_event("minecraft:entity.ravager.attack"), 1.0, 1.0);
-        self.mob_do_hurt_target(id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Ravager.doHurtTarget(Ravager.java:321)"], || self.mob_do_hurt_target(id, target))
     }
 }

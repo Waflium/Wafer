@@ -164,7 +164,7 @@ impl ServerLevel {
         zoglin_mut(self.mob_mut(id).expect("a zoglin")).attack_animation_remaining_ticks = 10;
         self.broadcast_entity_event(id, 4);
         self.make_sound(id, sound_event("minecraft:entity.zoglin.attack"));
-        hoglin_base::hurt_and_throw_target(self, id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Zoglin.doHurtTarget(Zoglin.java:197)"], || hoglin_base::hurt_and_throw_target(self, id, target))
     }
 
     pub fn zoglin_blocked_by_item(&mut self, id: EntityId, defender: EntityId) {
@@ -201,7 +201,7 @@ impl ServerLevel {
     }
 
     pub fn zoglin_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "zoglinBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Zoglin.customServerAiStep(Zoglin.java:255)"], || Brain::tick_in_zone(self, id, "zoglinBrain"));
         if self.mob(id).is_none() {
             return;
         }

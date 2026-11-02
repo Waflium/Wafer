@@ -105,7 +105,9 @@ impl KineticWeapon {
             let deals_damage = self.damage_conditions.is_some_and(|condition| condition.test(ticks_used, attacker_speed_projection, relative_speed, factor));
             if deals_dismount || deals_knockback || deals_damage {
                 let damage_dealt = base_mob_damage as f32 + mth::floor(relative_speed * self.damage_multiplier as f64) as f32;
-                affected |= level.stab_attack(living_entity, equipment_slot, other_entity, damage_dealt, deals_damage, deals_knockback, deals_dismount);
+                affected |= crate::server::main_thread_frames::within(&["net.minecraft.world.item.component.KineticWeapon.damageEntities(KineticWeapon.java:128)"], || {
+                    level.stab_attack(living_entity, equipment_slot, other_entity, damage_dealt, deals_damage, deals_knockback, deals_dismount)
+                });
             }
         }
         if affected {

@@ -20,7 +20,9 @@ impl BlockBehaviour for CactusBlock {
         _effects: &mut crate::world::entity::inside_block::InsideBlockEffects,
         _is_precise: bool,
     ) {
-        level.hurt(entity, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::CACTUS), 1.0);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CactusBlock.entityInside(CactusBlock.java:115)"], || {
+            level.hurt(entity, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::CACTUS), 1.0)
+        });
     }
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {

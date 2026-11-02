@@ -27,7 +27,7 @@ impl CaveSpider {
 
 impl ServerLevel {
     pub fn cave_spider_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
-        if !self.mob_do_hurt_target(id, target) {
+        if !crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.spider.CaveSpider.doHurtTarget(CaveSpider.java:33)"], || self.mob_do_hurt_target(id, target)) {
             return false;
         }
         if self.is_living(target) {

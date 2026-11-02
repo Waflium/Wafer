@@ -130,14 +130,18 @@ impl Server {
     pub fn set_force_game_mode(&mut self, force: bool) {
         self.config.force_game_mode = force;
         self.update_property("force-gamemode", force.to_string());
-        self.enforce_game_type_for_players(self.forced_game_type());
+        crate::server::main_thread_frames::within(&["net.minecraft.server.dedicated.DedicatedServer.setForceGameMode(DedicatedServer.java:758)"], || {
+            self.enforce_game_type_for_players(self.forced_game_type())
+        });
     }
 
     pub fn set_game_mode(&mut self, game_mode: GameType) {
         self.config.game_mode = game_mode;
         self.update_property("gamemode", game_mode.name().to_string());
         self.default_game_type.set(game_mode);
-        self.enforce_game_type_for_players(self.forced_game_type());
+        crate::server::main_thread_frames::within(&["net.minecraft.server.dedicated.DedicatedServer.setGameMode(DedicatedServer.java:768)"], || {
+            self.enforce_game_type_for_players(self.forced_game_type())
+        });
     }
 
     pub fn set_view_distance(&mut self, view_distance: i32) {

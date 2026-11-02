@@ -202,7 +202,7 @@ impl ServerLevel {
             hit_result
         };
         if !self.entity(id).no_physics && self.is_alive(id) && hit_result.get_type() != Type::Miss {
-            self.hit_target_or_deflect_self(id, hit_result);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.tick(FireworkRocketEntity.java:167)"], || self.hit_target_or_deflect_self(id, hit_result));
             self.entity_mut(id).needs_sync = true;
         }
         self.update_rotation(id);
@@ -214,7 +214,7 @@ impl ServerLevel {
         let rocket = firework(self.projectile_mut(id));
         rocket.life += 1;
         if rocket.life > rocket.lifetime {
-            self.firework_explode(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.tick(FireworkRocketEntity.java:182)"], || self.firework_explode(id));
         }
     }
 
@@ -222,12 +222,12 @@ impl ServerLevel {
         self.broadcast_entity_event(id, EVENT_FIREWORKS_EXPLODE);
         let owner = self.projectile_get_owner(id);
         self.entity_game_event_by(id, crate::world::level::gameevent::game_event::EXPLODE, owner);
-        self.deal_explosion_damage(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.explode(FireworkRocketEntity.java:189)"], || self.deal_explosion_damage(id));
         self.discard(id);
     }
 
     pub fn firework_rocket_on_hit_entity(&mut self, id: EntityId) {
-        self.firework_explode(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.onHitEntity(FireworkRocketEntity.java:197)"], || self.firework_explode(id));
     }
 
     pub fn firework_rocket_on_hit_block(&mut self, id: EntityId, hit_result: BlockHitResult) {
@@ -236,7 +236,7 @@ impl ServerLevel {
         let mut noop = InsideBlockEffects::default();
         block::of(state).entity_inside(state, self, pos, id, &mut noop, true);
         if self.projectile(id).get_explosions() > 0 {
-            self.firework_explode(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.onHitBlock(FireworkRocketEntity.java:206)"], || self.firework_explode(id));
         }
         self.projectile_base_on_hit_block(id, hit_result);
     }
@@ -250,7 +250,9 @@ impl ServerLevel {
         let attached_to_entity = firework(self.projectile_mut(id)).attached_to_entity;
         let source = DamageSource::source(damage_types::FIREWORKS, Some(id), self.projectile_get_owner(id));
         if let Some(attached) = attached_to_entity.filter(|&attached| self.entity_ref(attached).is_some()) {
-            self.hurt_server(attached, source, 5.0 + (explosions * 2) as f32);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.dealExplosionDamage(FireworkRocketEntity.java:224)"], || {
+                self.hurt_server(attached, source, 5.0 + (explosions * 2) as f32)
+            });
         }
         let rocket_pos = self.entity(id).position();
         let area = self.entity(id).bounding_box().inflate_all(5.0);
@@ -274,7 +276,7 @@ impl ServerLevel {
                 let distance = self.entity(id).distance_to(self.entity(target));
                 let damage = damage_amount * ((5.0 - distance as f64) / 5.0).sqrt() as f32;
                 let source = DamageSource::source(damage_types::FIREWORKS, Some(id), self.projectile_get_owner(id));
-                self.hurt_server(target, source, damage);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.FireworkRocketEntity.dealExplosionDamage(FireworkRocketEntity.java:249)"], || self.hurt_server(target, source, damage));
             }
         }
     }

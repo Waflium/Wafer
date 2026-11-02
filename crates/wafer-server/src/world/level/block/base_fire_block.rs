@@ -54,7 +54,14 @@ fn is_portal(level: &mut ServerLevel, pos: BlockPos, forward_direction: Directio
 pub fn entity_inside(effects: &mut InsideBlockEffects, fire_damage: f32) {
     effects.apply(InsideBlockEffectType::ClearFreeze);
     effects.apply(InsideBlockEffectType::FireIgnite);
-    effects.run_after(InsideBlockEffectType::FireIgnite, Box::new(move |level, id: EntityId| level.hurt(id, DamageSource::new(damage_types::IN_FIRE), fire_damage)));
+    effects.run_after(
+        InsideBlockEffectType::FireIgnite,
+        Box::new(move |level, id: EntityId| {
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.BaseFireBlock.lambda$entityInside$0(BaseFireBlock.java:126)"], || {
+                level.hurt(id, DamageSource::new(damage_types::IN_FIRE), fire_damage)
+            })
+        }),
+    );
 }
 
 pub fn on_place(state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState) {

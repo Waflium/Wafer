@@ -434,7 +434,9 @@ impl ServerLevel {
 
     fn hit_targets_or_deflect_self(&mut self, id: EntityId, entity_hit_results: &[EntityHitResult]) -> ProjectileDeflection {
         for &e in entity_hit_results {
-            let deflection = self.hit_target_or_deflect_self(id, HitResult::Entity(e));
+            let deflection = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.hitTargetsOrDeflectSelf(AbstractArrow.java:321)"], || {
+                self.hit_target_or_deflect_self(id, HitResult::Entity(e))
+            });
             if !self.is_alive(id) || deflection != ProjectileDeflection::None {
                 return deflection;
             }

@@ -282,7 +282,7 @@ impl VexChargeAttackGoal {
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
         let Some(attack_target) = level.get_target(mob) else { return };
         if level.entity(mob).bounding_box().intersects(&level.entity(attack_target).bounding_box()) {
-            level.do_hurt_target(mob, attack_target);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Vex$VexChargeAttackGoal.tick(Vex.java:317)"], || level.do_hurt_target(mob, attack_target));
             set_is_charging(level.entity_mut(mob), false);
         } else {
             let t = level.entity(attack_target);

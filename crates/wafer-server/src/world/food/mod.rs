@@ -114,7 +114,7 @@ impl ServerLevel {
             if food.tick_timer >= 80 {
                 let health = self.player(id).health;
                 if health > 10.0 || difficulty == Difficulty::Hard || health > 1.0 && difficulty == Difficulty::Normal {
-                    self.hurt_server(id, DamageSource::new(damage_types::STARVE), 1.0);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.food.FoodData.tick(FoodData.java:68)"], || self.hurt_server(id, DamageSource::new(damage_types::STARVE), 1.0));
                 }
                 self.player_mut(id).food_data.tick_timer = 0;
             }

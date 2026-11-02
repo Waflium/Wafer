@@ -227,7 +227,7 @@ impl ServerLevel {
     }
 
     pub fn goat_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "goatBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.goat.Goat.customServerAiStep(Goat.java:207)"], || Brain::tick_in_zone(self, id, "goatBrain"));
         if self.mob(id).is_none() {
             return;
         }

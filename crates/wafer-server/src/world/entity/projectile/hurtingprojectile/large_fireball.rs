@@ -67,7 +67,10 @@ impl ServerLevel {
         let explosion_power = large_fireball(self.projectile(id)).explosion_power;
         let position = self.entity(id).position();
         let indirect_source = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
-        self.explode(Some(id), indirect_source, None, position, explosion_power as f32, grief, ExplosionInteraction::Mob);
+        crate::server::main_thread_frames::within(
+            &[crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_FIRE, "net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball.onHit(LargeFireball.java:37)"],
+            || self.explode(Some(id), indirect_source, None, position, explosion_power as f32, grief, ExplosionInteraction::Mob),
+        );
         self.discard(id);
     }
 

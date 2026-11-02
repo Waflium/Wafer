@@ -247,7 +247,13 @@ impl PolarBearMeleeAttackGoal {
     fn check_and_perform_attack(goal: &mut MeleeAttackGoal, level: &mut ServerLevel, mob: EntityId, target: EntityId) {
         if goal.can_perform_attack(level, mob, target) {
             goal.reset_attack_cooldown();
-            level.do_hurt_target(mob, target);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.entity.animal.polarbear.PolarBear$PolarBearMeleeAttackGoal.checkAndPerformAttack(PolarBear.java:334)",
+                    "net.minecraft.world.entity.ai.goal.MeleeAttackGoal.tick(MeleeAttackGoal.java:144)",
+                ],
+                || level.do_hurt_target(mob, target),
+            );
             set_standing(level.entity_mut(mob), false);
         } else {
             let width = level.entity(target).dimensions.width + 3.0;

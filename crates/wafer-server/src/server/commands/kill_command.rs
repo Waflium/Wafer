@@ -7,12 +7,12 @@ use crate::world::entity::EntityId;
 
 pub fn kill_self(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let entity = source.entity_or_exception()?;
-    kill(server, source, &[entity])
+    crate::server::main_thread_frames::within(&["net.minecraft.server.commands.KillCommand.lambda$register$0(KillCommand.java:28)"], || kill(server, source, &[entity]))
 }
 
 pub fn kill_targets(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let targets = context.get_entities(server, source, "targets")?;
-    kill(server, source, &targets)
+    crate::server::main_thread_frames::within(&["net.minecraft.server.commands.KillCommand.lambda$register$1(KillCommand.java:31)"], || kill(server, source, &targets))
 }
 
 fn kill(server: &mut Server, source: &CommandSourceStack, victims: &[EntityId]) -> Result<i32, CommandSyntaxException> {
@@ -22,7 +22,7 @@ fn kill(server: &mut Server, source: &CommandSourceStack, victims: &[EntityId]) 
         let Some(level) = server.level_of(entity) else { continue };
         let mut level = server.lend_level(level);
         let living = level.is_living(entity);
-        level.kill(entity);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.commands.KillCommand.kill(KillCommand.java:40)"], || level.kill(entity));
         if !living && !level.dragon_parts.contains_key(entity) {
             level.remove_entity(entity);
         }

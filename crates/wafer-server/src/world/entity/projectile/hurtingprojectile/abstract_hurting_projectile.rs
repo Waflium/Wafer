@@ -88,7 +88,9 @@ impl ServerLevel {
             self.ignite_for_seconds(id, 1.0);
         }
         if hit_result.get_type() != Type::Miss && self.is_alive(id) {
-            self.hit_target_or_deflect_self(id, hit_result);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile.tick(AbstractHurtingProjectile.java:99)"], || {
+                self.hit_target_or_deflect_self(id, hit_result)
+            });
         }
     }
 

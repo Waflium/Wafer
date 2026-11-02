@@ -438,7 +438,7 @@ impl ServerLevel {
         if !is_aggressive(self.entity(id)) {
             panda_mut(self.mob_mut(id).expect("a panda")).did_bite = true;
         }
-        self.mob_do_hurt_target(id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.panda.Panda.doHurtTarget(Panda.java:425)"], || self.mob_do_hurt_target(id, target))
     }
 
     pub fn panda_play_attack_sound(&mut self, id: EntityId) {

@@ -250,7 +250,10 @@ impl ServerLevel {
         let position = mob.entity.position();
         self.living_mut(id).dead = true;
         {
-            let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.monster.Creeper.explodeCreeper(Creeper.java:244)"]);
+            let _scope = crate::server::main_thread_frames::enter_static(&[
+                crate::world::level::server_explosion::LEVEL_EXPLODE,
+                "net.minecraft.world.entity.monster.Creeper.explodeCreeper(Creeper.java:244)",
+            ]);
             self.explode(Some(id), Some(id), None, position, radius, false, ExplosionInteraction::Mob);
         }
         self.spawn_lingering_cloud(id);

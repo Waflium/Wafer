@@ -81,7 +81,9 @@ impl BlockBehaviour for CampfireBlock {
 
     fn entity_inside(&self, state: BlockState, level: &mut ServerLevel, _pos: BlockPos, entity: EntityId, _effects: &mut InsideBlockEffects, _is_precise: bool) {
         if state.get(LIT) && level.is_living(entity) {
-            level.hurt_server(entity, DamageSource::new(damage_types::CAMPFIRE), self.fire_damage);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CampfireBlock.entityInside(CampfireBlock.java:105)"], || {
+                level.hurt(entity, DamageSource::new(damage_types::CAMPFIRE), self.fire_damage)
+            });
         }
     }
 

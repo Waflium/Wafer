@@ -57,7 +57,7 @@ fn wind_charge(projectile: &mut Projectile) -> &mut WindCharge {
 
 impl ServerLevel {
     pub fn wind_charge_tick(&mut self, id: EntityId) {
-        self.abstract_wind_charge_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge.tick(WindCharge.java:52)"], || self.abstract_wind_charge_tick(id));
         self.then_tick(move |level| level.wind_charge_tick_end(id));
     }
 

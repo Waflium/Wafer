@@ -159,7 +159,7 @@ impl ServerLevel {
                 thrown_trident_mut(self.projectile_mut(id)).client_side_return_trident_tick_count += 1;
             }
         }
-        self.abstract_arrow_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.ThrownTrident.tick(ThrownTrident.java:101)"], || self.abstract_arrow_tick(id));
     }
 
     fn is_acceptible_return_owner(&self, id: EntityId) -> bool {

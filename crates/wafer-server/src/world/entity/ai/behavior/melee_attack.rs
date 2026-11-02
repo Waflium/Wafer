@@ -30,7 +30,7 @@ pub fn create_with(can_attack_predicate: fn(&ServerLevel, EntityId) -> bool, coo
                 let tracker = EntityTracker::new(level, target, true);
                 look_target.set(level, body, PositionTracker::Entity(tracker));
                 level.swing_for_attack(body, InteractionHand::MainHand);
-                level.do_hurt_target(body, target);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.behavior.MeleeAttack.lambda$create$3(MeleeAttack.java:29)"], || level.do_hurt_target(body, target));
                 attack_cooling_down.set_with_expiry(level, body, true, cooldown_between_attacks as i64);
                 true
             } else {

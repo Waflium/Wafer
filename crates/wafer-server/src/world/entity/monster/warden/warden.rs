@@ -257,7 +257,7 @@ impl ServerLevel {
     }
 
     pub fn warden_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "wardenBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.warden.Warden.customServerAiStep(Warden.java:327)"], || Brain::tick_in_zone(self, id, "wardenBrain"));
         if self.mob(id).is_none() {
             return;
         }
@@ -284,7 +284,7 @@ impl ServerLevel {
         let pitch = self.voice_pitch(id);
         self.entity_play_sound(id, sound_event("minecraft:entity.warden.attack_impact"), 10.0, pitch);
         sonic_boom::set_cooldown(self, id, sonic_boom::COOLDOWN);
-        self.mob_do_hurt_target(id, target)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.warden.Warden.doHurtTarget(Warden.java:267)"], || self.mob_do_hurt_target(id, target))
     }
 
     pub fn warden_is_invulnerable_to(&self, id: EntityId, source: &DamageSource) -> bool {

@@ -1512,7 +1512,7 @@ impl ServerLevel {
         let effect_state = self.block_state(effect_pos);
         if local {
             let on_ground = self.entity(id).on_ground;
-            self.check_fall_damage(id, movement.y, on_ground, effect_state, effect_pos);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.move(Entity.java:914)"], || self.check_fall_damage(id, movement.y, on_ground, effect_state, effect_pos));
         }
         if self.entity_ref(id).is_none_or(Entity::is_removed) {
             profiler::pop();
@@ -2225,7 +2225,7 @@ impl ServerLevel {
         if self.entity(id).on_ground {
             let effect_pos = self.on_pos_legacy(id);
             let state = self.block_state(effect_pos);
-            block::of(state).step_on(self, effect_pos, state, id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1115)"], || block::of(state).step_on(self, effect_pos, state, id));
             if self.entity_ref(id).is_none() {
                 return;
             }
@@ -2234,7 +2234,7 @@ impl ServerLevel {
         let was_freezing = self.entity(id).is_freezing();
         let previous_fire_ticks = self.entity(id).remaining_fire_ticks;
         crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1121)"], || self.check_inside_blocks(id, movements));
-        self.apply_inside_effects(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1122)"], || self.apply_inside_effects(id));
         if self.entity_ref(id).is_none() {
             return;
         }
@@ -2274,6 +2274,7 @@ impl ServerLevel {
             if !self.is_alive(id) {
                 break;
             }
+            let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.InsideBlockEffectApplier$StepBasedCollector.applyAndClear(InsideBlockEffectApplier.java:67)"]);
             match effect {
                 QueuedEffect::Type(ty) => self.apply_inside_block_effect_type(id, ty),
                 QueuedEffect::Callback(f) => f(self, id),
@@ -2418,7 +2419,7 @@ impl ServerLevel {
                     let is_precise = moved_far || deflated.intersects_block(pos);
                     effects.advance_step(iteration);
                     let block_events_before = self.block_event_count();
-                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.lambda$checkInsideBlocks$0(Entity.java:1546)"], || {
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.entityInside(BlockBehaviour.java:1161)", "net.minecraft.world.entity.Entity.lambda$checkInsideBlocks$0(Entity.java:1546)"], || {
                         behaviour.entity_inside(state, self, pos, id, &mut effects, is_precise)
                     });
                     for index in block_events_before..self.block_event_count() {
@@ -3109,7 +3110,9 @@ impl ServerLevel {
             return;
         }
         if self.is_living(id) {
-            self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.kill(LivingEntity.java:336)"], || {
+                self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX)
+            });
             return;
         }
         if matches!(self.find_entity(id), Some(LevelEntity::EndCrystal(_))) {
@@ -3152,7 +3155,7 @@ impl ServerLevel {
         if self.fire_immune(id) {
             return;
         }
-        if self.hurt_server(id, DamageSource::new(damage_types::LAVA), 4.0) && self.should_play_lava_hurt_sound(id) && !self.entity(id).is_silent() {
+        if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.lavaHurt(Entity.java:718)"], || self.hurt_server(id, DamageSource::new(damage_types::LAVA), 4.0)) && self.should_play_lava_hurt_sound(id) && !self.entity(id).is_silent() {
             let source = self.sound_source(id);
             let e = self.entity_mut(id);
             let pitch = 2.0 + e.random.next_float() * 0.4;

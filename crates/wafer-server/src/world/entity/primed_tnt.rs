@@ -96,7 +96,7 @@ impl ServerLevel {
         tnt.set_fuse(fuse);
         if fuse <= 0 {
             self.discard(id);
-            self.explode_primed_tnt(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.item.PrimedTnt.tick(PrimedTnt.java:135)"], || self.explode_primed_tnt(id));
         } else {
             self.update_fluid_interaction(id);
         }
@@ -114,6 +114,10 @@ impl ServerLevel {
         let center = Vec3::new(e.x(), e.y() + PrimedTnt::DIMENSIONS.height as f64 * 0.0625, e.z());
         let owner = owner.and_then(|uuid| self.players.values().find(|p| p.profile.uuid == uuid && !p.entity.is_removed()).map(|p| p.entity.id));
         let damage_calculator = if used_portal { ExplosionDamageCalculator::UsedPortal } else { ExplosionDamageCalculator::Default };
+        let _scope = crate::server::main_thread_frames::enter_static(&[
+            crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_SOURCE,
+            "net.minecraft.world.entity.item.PrimedTnt.explode(PrimedTnt.java:149)",
+        ]);
         self.explode_with_calculator(Some(id), owner, None, damage_calculator, center, power, false, ExplosionInteraction::Tnt);
     }
 }

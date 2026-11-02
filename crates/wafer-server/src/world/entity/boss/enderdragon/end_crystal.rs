@@ -92,7 +92,10 @@ impl ServerLevel {
                 });
                 let e = self.entity(id);
                 let center = Vec3::new(e.x(), e.y(), e.z());
-                self.explode(Some(id), None, damage_source, center, 6.0, false, ExplosionInteraction::Block);
+                crate::server::main_thread_frames::within(
+                    &[crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_SOURCE, "net.minecraft.world.entity.boss.enderdragon.EndCrystal.hurtServer(EndCrystal.java:109)"],
+                    || self.explode(Some(id), None, damage_source, center, 6.0, false, ExplosionInteraction::Block),
+                );
             }
             self.end_crystal_on_destroyed_by(id, &source);
         }

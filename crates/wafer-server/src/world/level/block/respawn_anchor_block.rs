@@ -59,7 +59,10 @@ fn explode(level: &mut ServerLevel, pos: BlockPos) {
     let in_water = any_water_neighbors || level.fluid_state(pos.above()).is(&fluid_tags::WATER);
     let boom_pos = Vec3::at_center_of(pos);
     let source = DamageSource { damage_source_position: Some(boom_pos), ..DamageSource::new(damage_types::BAD_RESPAWN_POINT) };
-    level.explode_with_calculator(None, None, Some(source), ExplosionDamageCalculator::RespawnAnchor { pos, in_water }, boom_pos, 5.0, true, ExplosionInteraction::Block);
+    crate::server::main_thread_frames::within(
+        &[crate::world::level::server_explosion::LEVEL_EXPLODE_AT, "net.minecraft.world.level.block.RespawnAnchorBlock.explode(RespawnAnchorBlock.java:158)"],
+        || level.explode_with_calculator(None, None, Some(source), ExplosionDamageCalculator::RespawnAnchor { pos, in_water }, boom_pos, 5.0, true, ExplosionInteraction::Block),
+    );
 }
 
 pub fn can_set_spawn(level: &ServerLevel, pos: BlockPos) -> bool {

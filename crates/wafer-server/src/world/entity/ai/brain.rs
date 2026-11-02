@@ -436,8 +436,12 @@ impl Brain {
         brain.ticking = true;
         let mut behaviors = std::mem::take(&mut brain.available_behaviors_by_priority);
         let mut retired_activities = None;
-        Brain::start_each_non_running_behavior(level, body, &mut behaviors, &mut retired_activities);
-        Brain::tick_each_running_behavior(level, body, &mut behaviors, &mut retired_activities);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.Brain.tick(Brain.java:435)"], || {
+            Brain::start_each_non_running_behavior(level, body, &mut behaviors, &mut retired_activities)
+        });
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.Brain.tick(Brain.java:436)"], || {
+            Brain::tick_each_running_behavior(level, body, &mut behaviors, &mut retired_activities)
+        });
         if let Some(brain) = level.get_brain_mut_if_present(body) {
             brain.ticking = false;
             if retired_activities.is_none() {
@@ -526,7 +530,7 @@ impl Brain {
                     for b in 0..behaviors[p].1[a].1.len() {
                         let behavior = &mut behaviors[p].1[a].1[b];
                         if behavior.get_status() == Status::Stopped && level.get_brain_if_present(body).is_some() {
-                            behavior.try_start(level, body, time);
+                            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.Brain.startEachNonRunningBehavior(Brain.java:466)"], || behavior.try_start(level, body, time));
                             Brain::refresh_if_requested(level, body, behaviors, retired_activities, time);
                         }
                     }
@@ -542,7 +546,7 @@ impl Brain {
                 for b in 0..behaviors[p].1[a].1.len() {
                     let behavior = &mut behaviors[p].1[a].1[b];
                     if behavior.get_status() == Status::Running && level.get_brain_if_present(body).is_some() {
-                        behavior.tick_or_stop(level, body, timestamp);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.Brain.tickEachRunningBehavior(Brain.java:479)"], || behavior.tick_or_stop(level, body, timestamp));
                         Brain::refresh_if_requested(level, body, behaviors, retired_activities, timestamp);
                     }
                 }

@@ -14,15 +14,18 @@ const SET_GAME_MODE_FRAMES: [&str; 2] = [
 
 pub fn set_mode_self(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let player = source.player_or_exception(server)?;
+    let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.server.commands.GameModeCommand.lambda$register$0(GameModeCommand.java:33)"]);
     Ok(set_mode(server, source, &[player], context.get_game_mode("gamemode")))
 }
 
 pub fn set_mode_targets(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let players = context.get_players(server, source, "target")?;
+    let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.server.commands.GameModeCommand.lambda$register$1(GameModeCommand.java:36)"]);
     Ok(set_mode(server, source, &players, context.get_game_mode("gamemode")))
 }
 
 fn set_mode(server: &mut Server, source: &CommandSourceStack, players: &[EntityId], game_type: GameType) -> i32 {
+    let _scope = crate::server::main_thread_frames::enter_static(&[SET_GAME_MODE_FRAMES[0], "net.minecraft.server.commands.GameModeCommand.setMode(GameModeCommand.java:58)"]);
     players.iter().filter(|&&player| set_game_mode_as(server, source, player, game_type)).count() as i32
 }
 

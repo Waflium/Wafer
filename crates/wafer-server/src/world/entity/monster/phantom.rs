@@ -451,7 +451,7 @@ impl PhantomSweepAttackGoal {
         let target_bb = t.bounding_box();
         phantom_mut(level.mob_mut(mob).expect("a phantom")).move_target_point = move_target_point;
         if level.entity(mob).bounding_box().inflate_all(0.2f32 as f64).intersects(&target_bb) {
-            level.do_hurt_target(mob, target);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Phantom$PhantomSweepAttackGoal.tick(Phantom.java:425)"], || level.do_hurt_target(mob, target));
             let Some(m) = level.mob_mut(mob) else { return };
             phantom_mut(m).attack_phase = AttackPhase::Circle;
             if !m.entity.is_silent() {

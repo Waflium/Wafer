@@ -94,13 +94,17 @@ impl ServerLevel {
         } else if tnt.fuse == 0 {
             let ignition_source = tnt.ignition_source.clone();
             let speed_sqr = self.entity(id).delta_movement.horizontal_distance_sqr();
-            self.minecart_tnt_explode(id, ignition_source, speed_sqr);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.minecart.MinecartTNT.tick(MinecartTNT.java:60)"], || {
+                self.minecart_tnt_explode(id, ignition_source, speed_sqr)
+            });
         }
         if self.entity(id).horizontal_collision {
             let speed_sqr = self.entity(id).delta_movement.horizontal_distance_sqr();
             if speed_sqr >= 0.01f32 as f64 {
                 let ignition_source = self.minecart_tnt(id).ignition_source.clone();
-                self.minecart_tnt_explode(id, ignition_source, speed_sqr);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.vehicle.minecart.MinecartTNT.tick(MinecartTNT.java:66)"], || {
+                    self.minecart_tnt_explode(id, ignition_source, speed_sqr)
+                });
             }
         }
     }
@@ -140,7 +144,10 @@ impl ServerLevel {
             let next_double = self.entity_mut(id).random.next_double();
             let radius = (explosion_power_base as f64 + explosion_speed_factor as f64 * next_double * 1.5 * speed) as f32;
             let center = self.entity(id).position();
-            self.explode_with_calculator(Some(id), None, damage_source, ExplosionDamageCalculator::TntMinecart { primed }, center, radius, false, ExplosionInteraction::Tnt);
+            crate::server::main_thread_frames::within(
+                &[crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_SOURCE, "net.minecraft.world.entity.vehicle.minecart.MinecartTNT.explode(MinecartTNT.java:110)"],
+                || self.explode_with_calculator(Some(id), None, damage_source, ExplosionDamageCalculator::TntMinecart { primed }, center, radius, false, ExplosionInteraction::Tnt),
+            );
             self.discard(id);
         } else if self.minecart_tnt(id).is_primed() {
             self.discard(id);

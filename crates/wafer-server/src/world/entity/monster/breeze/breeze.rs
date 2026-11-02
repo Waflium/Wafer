@@ -139,7 +139,7 @@ impl ServerLevel {
 
     pub fn breeze_custom_server_ai_step(&mut self, id: EntityId) {
         profiler::push("breezeBrain");
-        Brain::tick(self, id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.breeze.Breeze.customServerAiStep(Breeze.java:257)"], || Brain::tick(self, id));
         if self.mob(id).is_none() {
             profiler::pop();
             return;

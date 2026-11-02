@@ -78,7 +78,10 @@ impl ServerLevel {
                                 self.remove_block(pos, false);
                             }
                             let center = wafer_core::Vec3::new((spike.get_center_x() as f32 + 0.5) as f64, spike.get_height() as f64, (spike.get_center_z() as f32 + 0.5) as f64);
-                            self.explode(None, None, None, center, 5.0, false, ExplosionInteraction::Block);
+                            crate::server::main_thread_frames::within(
+                                &[crate::world::level::server_explosion::LEVEL_EXPLODE, "net.minecraft.world.level.dimension.end.DragonRespawnStage$3.tick(DragonRespawnStage.java:64)"],
+                                || self.explode(None, None, None, center, 5.0, false, ExplosionInteraction::Block),
+                            );
                             let feature = EndSpikeFeature::new(vec![spike], true, Some(BEAM_POS));
                             feature.place(self, &mut LegacyRandomSource::create(), BlockPos::new(spike.get_center_x(), 45, spike.get_center_z()));
                         }
@@ -94,7 +97,10 @@ impl ServerLevel {
                     for &crystal in crystals {
                         self.set_crystal_beam_targets(&[crystal], None);
                         let Some(center) = self.entity_ref(crystal).map(crate::world::entity::Entity::position) else { continue };
-                        self.explode(Some(crystal), None, None, center, 6.0, false, ExplosionInteraction::None);
+                        crate::server::main_thread_frames::within(
+                            &[crate::world::level::server_explosion::LEVEL_EXPLODE, "net.minecraft.world.level.dimension.end.DragonRespawnStage$4.tick(DragonRespawnStage.java:83)"],
+                            || self.explode(Some(crystal), None, None, center, 6.0, false, ExplosionInteraction::None),
+                        );
                         self.discard(crystal);
                     }
                 } else if time >= 80 {

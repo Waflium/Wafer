@@ -102,7 +102,9 @@ impl ServerLevel {
             self.abstract_wind_charge_explode(id, position);
             self.discard(id);
         } else {
-            self.abstract_hurting_projectile_tick(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.tick(AbstractWindCharge.java:171)"], || {
+                self.abstract_hurting_projectile_tick(id)
+            });
         }
     }
 

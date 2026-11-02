@@ -305,7 +305,7 @@ impl ServerLevel {
     }
 
     pub fn sulfur_cube_tick(&mut self, id: EntityId) {
-        self.sulfur_cube_tick_fuse(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.SulfurCube.tick(SulfurCube.java:285)"], || self.sulfur_cube_tick_fuse(id));
         self.sulfur_cube_prime_when_on_powered_position(id);
         crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.SulfurCube.tick(SulfurCube.java:287)"], || self.abstract_cube_mob_tick(id));
     }
@@ -326,7 +326,10 @@ impl ServerLevel {
             let e = self.entity(id);
             let center = Vec3::new(e.x(), e.y() + e.dimensions.height as f64 * 0.0625, e.z());
             let damage_calculator = if e.portal_cooldown > 0 { ExplosionDamageCalculator::UsedPortal } else { ExplosionDamageCalculator::Default };
-            self.explode_with_calculator(Some(id), Some(id), None, damage_calculator, center, explosion_data.power as f32, explosion_data.causes_fire, interaction);
+            crate::server::main_thread_frames::within(
+                &[crate::world::level::server_explosion::LEVEL_EXPLODE_WITH_SOURCE, "net.minecraft.world.entity.monster.cubemob.SulfurCube.tickFuse(SulfurCube.java:304)"],
+                || self.explode_with_calculator(Some(id), Some(id), None, damage_calculator, center, explosion_data.power as f32, explosion_data.causes_fire, interaction),
+            );
         }
         self.trigger_on_death_mob_effects(id, RemovalReason::Killed);
         self.discard(id);

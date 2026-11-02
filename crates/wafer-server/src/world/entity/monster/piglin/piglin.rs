@@ -219,7 +219,7 @@ impl ServerLevel {
     }
 
     pub fn piglin_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick_in_zone(self, id, "piglinBrain");
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.piglin.Piglin.customServerAiStep(Piglin.java:288)"], || Brain::tick_in_zone(self, id, "piglinBrain"));
         if self.mob(id).is_none() {
             return;
         }

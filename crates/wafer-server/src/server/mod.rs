@@ -1008,6 +1008,7 @@ impl Server {
     pub fn enforce_game_type_for_players(&mut self, game_type: Option<GameType>) -> i32 {
         let Some(game_type) = game_type else { return 0 };
         let ids = self.player_ids();
+        let _scope = main_thread_frames::enter_static(&["net.minecraft.server.MinecraftServer.enforceGameTypeForPlayers(MinecraftServer.java:1405)"]);
         ids.into_iter().filter(|&id| self.entity_level_mut(id).set_game_mode(id, game_type)).count() as i32
     }
 
@@ -2666,7 +2667,7 @@ const PLACE_NEW_PLAYER_FRAMES: [&str; 12] = [
     "java.base/java.lang.Thread.run(Thread.java:1474)",
 ];
 
-const CONNECTION_TICK_FRAMES: [&str; 7] = [
+pub(crate) const CONNECTION_TICK_FRAMES: [&str; 7] = [
     "net.minecraft.server.network.ServerGamePacketListenerImpl.tickPlayer(ServerGamePacketListenerImpl.java:345)",
     "net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:320)",
     "net.minecraft.network.Connection.tick(Connection.java:368)",

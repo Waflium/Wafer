@@ -315,8 +315,10 @@ impl GuardianAttackGoal {
             if elder {
                 magic_damage += 2.0;
             }
-            level.hurt_server(target, DamageSource::source(damage_types::INDIRECT_MAGIC, Some(mob), Some(mob)), magic_damage);
-            level.do_hurt_target(mob, target);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Guardian$GuardianAttackGoal.tick(Guardian.java:447)"], || {
+                level.hurt_server(target, DamageSource::source(damage_types::INDIRECT_MAGIC, Some(mob), Some(mob)), magic_damage)
+            });
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Guardian$GuardianAttackGoal.tick(Guardian.java:448)"], || level.do_hurt_target(mob, target));
             level.set_target(mob, None);
         }
     }

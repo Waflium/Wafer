@@ -87,7 +87,7 @@ impl ServerLevel {
                 let bb = self.entity(id).bounding_box().inflate(0.2, 0.0, 0.2);
                 let entities: Vec<EntityId> = self.get_entities(None, &bb).into_iter().filter(|&entity| self.is_living(entity)).collect();
                 for entity in entities {
-                    self.evoker_fangs_deal_damage_to(id, entity);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.EvokerFangs.tick(EvokerFangs.java:100)"], || self.evoker_fangs_deal_damage_to(id, entity));
                 }
             }
             if !self.evoker_fangs(id).sent_spike_event {
@@ -107,14 +107,18 @@ impl ServerLevel {
         if self.is_alive(entity) && !self.entity(entity).invulnerable && Some(entity) != current_owner {
             match current_owner {
                 None => {
-                    self.hurt(entity, DamageSource::new(damage_types::MAGIC), 6.0);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.EvokerFangs.dealDamageTo(EvokerFangs.java:120)"], || {
+                        self.hurt(entity, DamageSource::new(damage_types::MAGIC), 6.0)
+                    });
                 }
                 Some(current_owner) => {
                     if self.is_allied_to(current_owner, entity) {
                         return;
                     }
                     let damage_source = DamageSource::source(damage_types::INDIRECT_MAGIC, Some(id), Some(current_owner));
-                    if self.hurt_server(entity, damage_source.clone(), 6.0) {
+                    if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.EvokerFangs.dealDamageTo(EvokerFangs.java:126)"], || {
+                        self.hurt_server(entity, damage_source.clone(), 6.0)
+                    }) {
                         self.do_post_attack_effects(entity, &damage_source);
                     }
                 }
