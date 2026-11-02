@@ -72,6 +72,90 @@ const SOCKET_DISPATCHER_READ_FRAMES: [&str; 6] = [
     "java.base/sun.nio.ch.SocketChannelImpl.implRead(SocketChannelImpl.java:422)",
 ];
 
+const HANDSHAKE_FLUSH_FRAMES: [&str; 13] = [
+    "java.base/sun.nio.ch.SocketDispatcher.write0(Native Method)",
+    "java.base/sun.nio.ch.SocketDispatcher.write(SocketDispatcher.java:57)",
+    "java.base/sun.nio.ch.IOUtil.writeFromNativeBuffer(IOUtil.java:137)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:81)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:58)",
+    "java.base/sun.nio.ch.SocketChannelImpl.implWrite(SocketChannelImpl.java:562)",
+    "java.base/sun.nio.ch.SocketChannelImpl.write(SocketChannelImpl.java:614)",
+    "io.netty.channel.socket.nio.NioSocketChannel.doWrite(NioSocketChannel.java:408)",
+    "io.netty.channel.AbstractChannel$AbstractUnsafe.flush0(AbstractChannel.java:794)",
+    "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.flush0(AbstractNioChannel.java:404)",
+    "io.netty.channel.AbstractChannel$AbstractUnsafe.flush(AbstractChannel.java:758)",
+    "io.netty.channel.DefaultChannelPipeline$HeadContext.flush(DefaultChannelPipeline.java:1391)",
+    "io.netty.channel.AbstractChannelHandlerContext.flush(AbstractChannelHandlerContext.java:754)",
+];
+
+const SSL_HANDLER_FLUSH_FRAMES: [&str; 4] = [
+    "io.netty.handler.ssl.SslHandler.forceFlush(SslHandler.java:2274)",
+    "io.netty.handler.ssl.SslHandler.wrapAndFlush(SslHandler.java:842)",
+    "io.netty.handler.ssl.SslHandler.flush(SslHandler.java:819)",
+    "io.netty.channel.AbstractChannelHandlerContext.flush(AbstractChannelHandlerContext.java:760)",
+];
+
+const HANDSHAKE_WRITE_FRAMES: [&str; 28] = [
+    "io.netty.channel.CombinedChannelDuplexHandler$DelegatingChannelHandlerContext.flush(CombinedChannelDuplexHandler.java:529)",
+    "io.netty.channel.ChannelOutboundHandlerAdapter.flush(ChannelOutboundHandlerAdapter.java:125)",
+    "io.netty.channel.CombinedChannelDuplexHandler.flush(CombinedChannelDuplexHandler.java:354)",
+    "io.netty.channel.AbstractChannelHandlerContext.flush(AbstractChannelHandlerContext.java:756)",
+    "io.netty.handler.codec.http.websocketx.WebSocketProtocolHandler.flush(WebSocketProtocolHandler.java:177)",
+    "io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler.flush(WebSocketServerProtocolHandler.java:54)",
+    "io.netty.channel.AbstractChannelHandlerContext.flush(AbstractChannelHandlerContext.java:760)",
+    "io.netty.channel.ChannelOutboundHandlerAdapter.flush(ChannelOutboundHandlerAdapter.java:125)",
+    "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:819)",
+    "io.netty.channel.AbstractChannelHandlerContext.writeAndFlush(AbstractChannelHandlerContext.java:776)",
+    "io.netty.channel.AbstractChannelHandlerContext.writeAndFlush(AbstractChannelHandlerContext.java:859)",
+    "io.netty.channel.DefaultChannelPipeline.writeAndFlush(DefaultChannelPipeline.java:1046)",
+    "io.netty.channel.Channel.writeAndFlush(Channel.java:257)",
+    "io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker.handshake(WebSocketServerHandshaker.java:231)",
+    "io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker.handshake(WebSocketServerHandshaker.java:277)",
+    "io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker.handshake(WebSocketServerHandshaker.java:255)",
+    "io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandshakeHandler.channelRead(WebSocketServerProtocolHandshakeHandler.java:86)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:357)",
+    "io.netty.channel.ChannelInboundHandlerAdapter.channelRead(ChannelInboundHandlerAdapter.java:93)",
+    "net.minecraft.server.jsonrpc.security.AuthenticationHandler.channelRead(AuthenticationHandler.java:63)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:355)",
+    "io.netty.handler.codec.MessageToMessageDecoder.channelRead(MessageToMessageDecoder.java:107)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:357)",
+    "io.netty.channel.CombinedChannelDuplexHandler$DelegatingChannelHandlerContext.fireChannelRead(CombinedChannelDuplexHandler.java:434)",
+    "io.netty.handler.codec.ByteToMessageDecoder.fireChannelRead(ByteToMessageDecoder.java:361)",
+    "io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:325)",
+    "io.netty.channel.CombinedChannelDuplexHandler.channelRead(CombinedChannelDuplexHandler.java:249)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:355)",
+];
+
+const SSL_HANDLER_UNWRAP_FRAMES: [&str; 7] = [
+    "io.netty.handler.ssl.SslHandler.unwrap(SslHandler.java:1526)",
+    "io.netty.handler.ssl.SslHandler.decodeJdkCompatible(SslHandler.java:1384)",
+    "io.netty.handler.ssl.SslHandler.decode(SslHandler.java:1435)",
+    "io.netty.handler.codec.ByteToMessageDecoder.decodeRemovalReentryProtection(ByteToMessageDecoder.java:545)",
+    "io.netty.handler.codec.ByteToMessageDecoder.callDecode(ByteToMessageDecoder.java:484)",
+    "io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:296)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:357)",
+];
+
+const PIPELINE_READ_FRAMES: [&str; 3] = [
+    "io.netty.channel.DefaultChannelPipeline$HeadContext.channelRead(DefaultChannelPipeline.java:1429)",
+    "io.netty.channel.DefaultChannelPipeline.fireChannelRead(DefaultChannelPipeline.java:918)",
+    "io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:176)",
+];
+
+fn handshake_write_exception(error: &std::io::Error, tls: bool) -> String {
+    let description = match error.kind() {
+        std::io::ErrorKind::ConnectionReset => "java.io.IOException: Connection reset by peer".to_string(),
+        _ if error.raw_os_error().is_some() => format!("java.io.IOException: {}", crate::util::java_nio::os_message(error).trim_end().trim_end_matches('.')),
+        _ => java_io_exception(error),
+    };
+    let ssl_flush: &[&str] = if tls { &SSL_HANDLER_FLUSH_FRAMES } else { &[] };
+    let ssl_unwrap: &[&str] = if tls { &SSL_HANDLER_UNWRAP_FRAMES } else { &[] };
+    [&HANDSHAKE_FLUSH_FRAMES[..], ssl_flush, &HANDSHAKE_WRITE_FRAMES, ssl_unwrap, &PIPELINE_READ_FRAMES, &NETTY_READ_FRAMES[7..]]
+        .concat()
+        .iter()
+        .fold(description, |trace, frame| format!("{trace}\n\tat {frame}"))
+}
+
 fn java_read_exception(error: &std::io::Error) -> String {
     let frames = |frames: &[&str]| -> String { frames.iter().map(|frame| format!("\n\tat {frame}")).collect() };
     if error.kind() == std::io::ErrorKind::ConnectionReset {
@@ -116,7 +200,7 @@ impl Connection {
     pub async fn run<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(self, stream: S, remote: SocketAddr) {
         let address = loggable_address(remote, true);
         self.log(format_args!("Management connection opened for {address}"));
-        if let Closed::Exception(exception) = self.serve(stream).await {
+        if let Closed::Exception(exception) = self.serve(stream, false).await {
             self.exception_caught(&exception);
         }
         self.server.on_disconnected(self.client.connection_id);
@@ -128,7 +212,7 @@ impl Connection {
         self.log(format_args!("Management connection opened for {address}"));
         match acceptor.accept(stream).await {
             Ok(tls) => {
-                if let Closed::Exception(exception) = self.serve(tls).await {
+                if let Closed::Exception(exception) = self.serve(tls, true).await {
                     self.exception_caught(&exception);
                 }
             }
@@ -142,7 +226,7 @@ impl Connection {
         self.log(format_args!("Management connection closed for {address}"));
     }
 
-    async fn serve<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(&self, mut stream: S) -> Closed {
+    async fn serve<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(&self, mut stream: S, tls: bool) -> Closed {
         let mut codec = HttpServerCodec::new();
         let mut chunk = [0u8; 4096];
         loop {
@@ -190,8 +274,8 @@ impl Connection {
             let handshake = match handshake(&request, token_in_protocol) {
                 Ok(Some(handshake)) => handshake,
                 Ok(None) => {
-                    if let Err(e) = stream.write_all(b"HTTP/1.1 426 Upgrade Required\r\nsec-websocket-version: 13\r\ncontent-length: 0\r\n\r\n").await {
-                        return Closed::Exception(java_io_exception(&e));
+                    if stream.write_all(b"HTTP/1.1 426 Upgrade Required\r\nsec-websocket-version: 13\r\ncontent-length: 0\r\n\r\n").await.is_err() {
+                        return Closed::Cleanly;
                     }
                     continue;
                 }
@@ -203,7 +287,7 @@ impl Connection {
             return match handshake {
                 Handshake::Rfc6455(response) => {
                     if let Err(e) = stream.write_all(response.as_bytes()).await {
-                        return Closed::Exception(java_io_exception(&e));
+                        return Closed::Exception(handshake_write_exception(&e, tls));
                     }
                     let config = WebSocketConfig::default().max_message_size(Some(MAX_CONTENT_LENGTH)).max_frame_size(Some(MAX_CONTENT_LENGTH));
                     let websocket = WebSocketStream::from_partially_read(ReadBatch { stream, open: true }, codec.into_remaining(), Role::Server, Some(config)).await;
@@ -211,7 +295,7 @@ impl Connection {
                 }
                 Handshake::Hixie(response) => {
                     if let Err(e) = stream.write_all(&response).await {
-                        return Closed::Exception(java_io_exception(&e));
+                        return Closed::Exception(handshake_write_exception(&e, tls));
                     }
                     self.hixie(stream, codec.into_remaining()).await
                 }
@@ -617,6 +701,9 @@ mod tests {
     fn read_failures_print_the_netty_read_frames() {
         let reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
         assert_eq!(java_read_exception(&reset), include_str!("connection_fixtures/reset_read.txt").trim_end());
+        let peer_reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        assert_eq!(handshake_write_exception(&peer_reset, false), include_str!("connection_fixtures/handshake_write_reset.txt").trim_end());
+        assert_eq!(handshake_write_exception(&peer_reset, true), include_str!("connection_fixtures/handshake_write_reset_tls.txt").trim_end());
         let aborted = std::io::Error::from_raw_os_error(10053);
         let (_, frames) = include_str!("connection_fixtures/aborted_read.txt").trim_end().split_once('\n').unwrap();
         let message = crate::util::java_nio::os_message(&aborted);
